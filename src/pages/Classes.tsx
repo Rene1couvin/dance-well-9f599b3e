@@ -1,175 +1,183 @@
+import { useEffect, useState } from "react";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, Clock, MapPin, Users } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { useNavigate } from "react-router-dom";
 
 const Classes = () => {
-  const classes = [
-    {
-      id: 1,
-      title: "Salsa Fundamentals",
-      category: "Salsa",
-      level: "Beginner",
-      instructor: "Maria Rodriguez",
-      schedule: "Mondays & Wednesdays",
-      time: "7:00 PM - 8:30 PM",
-      location: "Studio A",
-      price: "Free",
-      capacity: 20,
-      enrolled: 12,
-    },
-    {
-      id: 2,
-      title: "Bachata Sensual",
-      category: "Bachata",
-      level: "Intermediate",
-      instructor: "Carlos Santos",
-      schedule: "Tuesdays & Thursdays",
-      time: "8:00 PM - 9:30 PM",
-      location: "Studio B",
-      price: "$40/month",
-      capacity: 16,
-      enrolled: 14,
-    },
-    {
-      id: 3,
-      title: "Kizomba Basics",
-      category: "Kizomba",
-      level: "Beginner",
-      instructor: "Ana Silva",
-      schedule: "Wednesdays",
-      time: "6:00 PM - 7:30 PM",
-      location: "Studio A",
-      price: "$30/month",
-      capacity: 18,
-      enrolled: 8,
-    },
-    {
-      id: 4,
-      title: "Advanced Salsa Styling",
-      category: "Salsa",
-      level: "Advanced",
-      instructor: "Luis Martinez",
-      schedule: "Fridays",
-      time: "7:30 PM - 9:00 PM",
-      location: "Studio B",
-      price: "$50/month",
-      capacity: 12,
-      enrolled: 10,
-    },
-    {
-      id: 5,
-      title: "Zouk Flow",
-      category: "Zouk",
-      level: "Intermediate",
-      instructor: "Patricia Costa",
-      schedule: "Saturdays",
-      time: "5:00 PM - 6:30 PM",
-      location: "Studio A",
-      price: "$35/month",
-      capacity: 15,
-      enrolled: 9,
-    },
-    {
-      id: 6,
-      title: "Semba Workshop",
-      category: "Semba",
-      level: "All Levels",
-      instructor: "João Ferreira",
-      schedule: "Sundays",
-      time: "3:00 PM - 5:00 PM",
-      location: "Studio B",
-      price: "$25/session",
-      capacity: 20,
-      enrolled: 15,
-    },
-  ];
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const navigate = useNavigate();
+  const [classes, setClasses] = useState<any[]>([]);
+  const [enrollments, setEnrollments] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const getLevelColor = (level: string) => {
-    switch (level) {
-      case "Beginner":
-        return "bg-secondary text-secondary-foreground";
-      case "Intermediate":
-        return "bg-accent text-accent-foreground";
-      case "Advanced":
-        return "bg-primary text-primary-foreground";
-      default:
-        return "bg-muted text-muted-foreground";
+  useEffect(() => {
+    fetchClasses();
+    if (user) {
+      fetchEnrollments();
+    }
+  }, [user]);
+
+  const fetchClasses = async () => {
+    const { data, error } = await supabase
+      .from("classes")
+      .select(`
+        *,
+        profiles:teacher_id(first_name, last_name)
+      `)
+      .eq("is_active", true);
+
+    if (error) {
+      toast({
+        title: "Error",
+        description: "Failed to load classes",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setClasses(data || []);
+    setLoading(false);
+  };
+
+  const fetchEnrollments = async () => {
+    if (!user) return;
+
+    const { data } = await supabase
+      .from("class_enrollments")
+      .select("class_id")
+      .eq("user_id", user.id);
+
+    if (data) {
+      setEnrollments(data.map((e) => e.class_id));
     }
   };
 
-  return (
-    <div className="flex min-h-screen flex-col">
-      <Header />
-      
-      <main className="flex-1">
-        {/* Hero Section */}
-        <section className="bg-gradient-hero py-16 md:py-20 text-white">
-          <div className="container">
-            <div className="max-w-3xl">
-              <h1 className="text-4xl font-bold mb-4 md:text-5xl">Our Classes</h1>
-              <p className="text-lg text-white/90">
-                Choose from a variety of dance styles and skill levels. Whether you're just starting or looking to refine your technique, we have the perfect class for you.
-              </p>
-            </div>
-          </div>
-        </section>
+  const handleEnroll = async (classId: string) => {
+    if (!user) {
+      navigate("/auth");
+      return;
+    }
 
-        {/* Classes Grid */}
-        <section className="py-12 md:py-16">
+    const { error } = await supabase
+      .from("class_enrollments")
+      .insert({ user_id: user.id, class_id: classId });
+
+    if (error) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    toast({
+      title: "Success",
+      description: "You've enrolled in the class!",
+    });
+
+    fetchEnrollments();
+  };
+
+  const handleUnenroll = async (classId: string) => {
+    if (!user) return;
+
+    const { error } = await supabase
+      .from("class_enrollments")
+      .delete()
+      .eq("user_id", user.id)
+      .eq("class_id", classId);
+
+    if (error) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    toast({
+      title: "Success",
+      description: "You've unenrolled from the class",
+    });
+
+    fetchEnrollments();
+  };
+
+  return (
+    <div className="min-h-screen flex flex-col">
+      <Header />
+      <main className="flex-1">
+        <section className="py-20 bg-gradient-subtle">
           <div className="container">
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {classes.map((classItem) => (
-                <Card key={classItem.id} className="flex flex-col hover:shadow-elegant transition-all duration-300 border-2">
-                  <CardHeader>
-                    <div className="flex items-start justify-between mb-2">
-                      <Badge variant="secondary">{classItem.category}</Badge>
-                      <Badge className={getLevelColor(classItem.level)}>{classItem.level}</Badge>
-                    </div>
-                    <CardTitle className="text-xl">{classItem.title}</CardTitle>
-                    <CardDescription>with {classItem.instructor}</CardDescription>
-                  </CardHeader>
+            <h1 className="text-5xl font-bold mb-6 text-center">Our Classes</h1>
+            <p className="text-xl text-muted-foreground text-center max-w-2xl mx-auto mb-12">
+              Choose from our variety of dance classes. All skill levels welcome!
+            </p>
+
+            {loading ? (
+              <p className="text-center">Loading classes...</p>
+            ) : classes.length === 0 ? (
+              <p className="text-center text-muted-foreground">No classes available at the moment.</p>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {classes.map((classItem) => {
+                  const isEnrolled = enrollments.includes(classItem.id);
                   
-                  <CardContent className="flex-1 space-y-3">
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Calendar className="h-4 w-4" />
-                      <span>{classItem.schedule}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Clock className="h-4 w-4" />
-                      <span>{classItem.time}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <MapPin className="h-4 w-4" />
-                      <span>{classItem.location}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Users className="h-4 w-4" />
-                      <span>{classItem.enrolled} / {classItem.capacity} enrolled</span>
-                    </div>
-                    <div className="pt-2">
-                      <p className="text-2xl font-bold text-primary">{classItem.price}</p>
-                    </div>
-                  </CardContent>
-                  
-                  <CardFooter>
-                    <Button 
-                      variant="hero" 
-                      className="w-full"
-                      disabled={classItem.enrolled >= classItem.capacity}
-                    >
-                      {classItem.enrolled >= classItem.capacity ? "Class Full" : "Enroll Now"}
-                    </Button>
-                  </CardFooter>
-                </Card>
-              ))}
-            </div>
+                  return (
+                    <Card key={classItem.id} className="hover:shadow-elegant transition-all">
+                      <CardHeader>
+                        <div className="flex justify-between items-start mb-2">
+                          <Badge variant="secondary">{classItem.category}</Badge>
+                        </div>
+                        <CardTitle>{classItem.title}</CardTitle>
+                        <CardDescription>{classItem.description}</CardDescription>
+                        {classItem.profiles && (
+                          <p className="text-sm text-muted-foreground">
+                            Teacher: {classItem.profiles.first_name} {classItem.profiles.last_name}
+                          </p>
+                        )}
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <div>
+                          <p className="text-sm font-medium">Schedule</p>
+                          <p className="text-sm text-muted-foreground">{classItem.schedule || "TBA"}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium">Location</p>
+                          <p className="text-sm text-muted-foreground">{classItem.location || "TBA"}</p>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-2xl font-bold text-primary">
+                            {classItem.price > 0 ? `${classItem.price} ${classItem.currency}` : "Free"}
+                          </span>
+                          {isEnrolled ? (
+                            <Button variant="outline" onClick={() => handleUnenroll(classItem.id)}>
+                              Unenroll
+                            </Button>
+                          ) : (
+                            <Button onClick={() => handleEnroll(classItem.id)}>
+                              Enroll Now
+                            </Button>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </section>
       </main>
-
       <Footer />
     </div>
   );

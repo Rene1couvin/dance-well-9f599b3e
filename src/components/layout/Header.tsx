@@ -1,9 +1,11 @@
 import { Button } from "@/components/ui/button";
-import { Menu } from "lucide-react";
+import { Menu, User } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
 
 const Header = () => {
+  const { user } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
@@ -38,12 +40,23 @@ const Header = () => {
         </div>
 
         <div className="hidden md:flex md:items-center md:gap-3">
-          <Button variant="ghost" asChild>
-            <Link to="/login">Sign In</Link>
-          </Button>
-          <Button variant="hero" asChild>
-            <Link to="/signup">Join Now</Link>
-          </Button>
+          {user ? (
+            <Button variant="ghost" asChild>
+              <Link to="/profile">
+                <User className="h-4 w-4 mr-2" />
+                Profile
+              </Link>
+            </Button>
+          ) : (
+            <>
+              <Button variant="ghost" asChild>
+                <Link to="/auth">Sign In</Link>
+              </Button>
+              <Button variant="hero" asChild>
+                <Link to="/auth">Join Now</Link>
+              </Button>
+            </>
+          )}
         </div>
 
         {/* Mobile Menu Button */}
@@ -104,12 +117,20 @@ const Header = () => {
               Contact
             </Link>
             <div className="flex flex-col gap-2 pt-4 border-t">
-              <Button variant="ghost" asChild onClick={() => setMobileMenuOpen(false)}>
-                <Link to="/login">Sign In</Link>
-              </Button>
-              <Button variant="hero" asChild onClick={() => setMobileMenuOpen(false)}>
-                <Link to="/signup">Join Now</Link>
-              </Button>
+              {user ? (
+                <Button variant="ghost" asChild onClick={() => setMobileMenuOpen(false)}>
+                  <Link to="/profile">Profile</Link>
+                </Button>
+              ) : (
+                <>
+                  <Button variant="ghost" asChild onClick={() => setMobileMenuOpen(false)}>
+                    <Link to="/auth">Sign In</Link>
+                  </Button>
+                  <Button variant="hero" asChild onClick={() => setMobileMenuOpen(false)}>
+                    <Link to="/auth">Join Now</Link>
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         </div>

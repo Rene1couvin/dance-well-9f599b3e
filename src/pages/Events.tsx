@@ -1,161 +1,186 @@
+import { useEffect, useState } from "react";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, MapPin, Clock, DollarSign } from "lucide-react";
+import { Calendar, MapPin } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { useNavigate } from "react-router-dom";
+import { format } from "date-fns";
 
 const Events = () => {
-  const events = [
-    {
-      id: 1,
-      title: "Latin Night Social Dance",
-      description: "Join us for an evening of social dancing with live DJ playing the best Latin hits.",
-      date: "2025-12-15",
-      time: "8:00 PM - 12:00 AM",
-      location: "Main Dance Hall",
-      price: "$15",
-      category: "Social Dance",
-      spotsLeft: 45,
-    },
-    {
-      id: 2,
-      title: "Bachata Styling Workshop",
-      description: "Learn advanced styling techniques with international instructor Elena Torres.",
-      date: "2025-12-20",
-      time: "2:00 PM - 5:00 PM",
-      location: "Studio A & B",
-      price: "$50",
-      category: "Workshop",
-      spotsLeft: 8,
-    },
-    {
-      id: 3,
-      title: "New Year's Dance Party",
-      description: "Ring in the new year with an epic dance celebration featuring multiple DJs and performances.",
-      date: "2025-12-31",
-      time: "9:00 PM - 2:00 AM",
-      location: "Grand Ballroom",
-      price: "$40",
-      category: "Party",
-      spotsLeft: 120,
-    },
-    {
-      id: 4,
-      title: "Kizomba Festival Weekend",
-      description: "Three days of workshops, socials, and performances with renowned Kizomba instructors.",
-      date: "2026-01-10",
-      time: "All Day",
-      location: "Dance Well Studios",
-      price: "$180",
-      category: "Festival",
-      spotsLeft: 25,
-    },
-    {
-      id: 5,
-      title: "Salsa Performance Showcase",
-      description: "Watch our talented students perform choreographed routines. Free entry!",
-      date: "2026-01-18",
-      time: "7:00 PM - 9:00 PM",
-      location: "Main Theater",
-      price: "Free",
-      category: "Performance",
-      spotsLeft: 200,
-    },
-    {
-      id: 6,
-      title: "Beginner's Social Night",
-      description: "A friendly social dance event designed specifically for beginners and newcomers.",
-      date: "2026-01-25",
-      time: "7:00 PM - 10:00 PM",
-      location: "Studio A",
-      price: "$10",
-      category: "Social Dance",
-      spotsLeft: 30,
-    },
-  ];
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const navigate = useNavigate();
+  const [events, setEvents] = useState<any[]>([]);
+  const [bookings, setBookings] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { 
-      weekday: 'long', 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
+  useEffect(() => {
+    fetchEvents();
+    if (user) {
+      fetchBookings();
+    }
+  }, [user]);
+
+  const fetchEvents = async () => {
+    const { data, error } = await supabase
+      .from("events")
+      .select("*")
+      .eq("status", "upcoming")
+      .gte("start_time", new Date().toISOString())
+      .order("start_time", { ascending: true });
+
+    if (error) {
+      toast({
+        title: "Error",
+        description: "Failed to load events",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setEvents(data || []);
+    setLoading(false);
+  };
+
+  const fetchBookings = async () => {
+    if (!user) return;
+
+    const { data } = await supabase
+      .from("bookings")
+      .select("event_id")
+      .eq("user_id", user.id);
+
+    if (data) {
+      setBookings(data.map((b) => b.event_id));
+    }
+  };
+
+  const handleBook = async (event: any) => {
+    if (!user) {
+      navigate("/auth");
+      return;
+    }
+
+    // If event has payment, redirect to payment URL
+    if (event.is_paid && event.payment_redirect_url) {
+      window.location.href = event.payment_redirect_url;
+      return;
+    }
+
+    // Otherwise, create booking directly
+    const { error } = await supabase
+      .from("bookings")
+      .insert({
+        user_id: user.id,
+        event_id: event.id,
+        status: event.is_paid ? "pending" : "confirmed",
+        amount: event.price,
+        currency: event.currency,
+      });
+
+    if (error) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    toast({
+      title: "Success",
+      description: event.is_paid
+        ? "Your booking is pending payment"
+        : "You've successfully booked this event!",
     });
+
+    fetchBookings();
   };
 
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="min-h-screen flex flex-col">
       <Header />
-      
       <main className="flex-1">
-        {/* Hero Section */}
-        <section className="bg-gradient-hero py-16 md:py-20 text-white">
+        <section className="py-20 bg-gradient-subtle">
           <div className="container">
-            <div className="max-w-3xl">
-              <h1 className="text-4xl font-bold mb-4 md:text-5xl">Upcoming Events</h1>
-              <p className="text-lg text-white/90">
-                Don't miss out on our exciting dance events, workshops, and social nights. Book your spot today!
-              </p>
-            </div>
-          </div>
-        </section>
+            <h1 className="text-5xl font-bold mb-6 text-center">Upcoming Events</h1>
+            <p className="text-xl text-muted-foreground text-center max-w-2xl mx-auto mb-12">
+              Don't miss out on our exciting dance events and workshops!
+            </p>
 
-        {/* Events Grid */}
-        <section className="py-12 md:py-16">
-          <div className="container">
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {events.map((event) => (
-                <Card key={event.id} className="flex flex-col hover:shadow-elegant transition-all duration-300 border-2">
-                  <CardHeader>
-                    <div className="mb-2">
-                      <Badge variant="secondary">{event.category}</Badge>
-                    </div>
-                    <CardTitle className="text-xl">{event.title}</CardTitle>
-                    <CardDescription className="line-clamp-2">{event.description}</CardDescription>
-                  </CardHeader>
+            {loading ? (
+              <p className="text-center">Loading events...</p>
+            ) : events.length === 0 ? (
+              <p className="text-center text-muted-foreground">No upcoming events at the moment.</p>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                {events.map((event) => {
+                  const isBooked = bookings.includes(event.id);
                   
-                  <CardContent className="flex-1 space-y-3">
-                    <div className="flex items-start gap-2 text-sm">
-                      <Calendar className="h-4 w-4 mt-0.5 text-primary" />
-                      <span>{formatDate(event.date)}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Clock className="h-4 w-4" />
-                      <span>{event.time}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <MapPin className="h-4 w-4" />
-                      <span>{event.location}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <DollarSign className="h-4 w-4" />
-                      <span className="text-lg font-bold text-primary">{event.price}</span>
-                    </div>
-                    <div className="pt-2">
-                      <p className="text-sm text-muted-foreground">
-                        {event.spotsLeft} spots remaining
-                      </p>
-                    </div>
-                  </CardContent>
-                  
-                  <CardFooter>
-                    <Button 
-                      variant="hero" 
-                      className="w-full"
-                      disabled={event.spotsLeft === 0}
-                    >
-                      {event.spotsLeft === 0 ? "Sold Out" : "Book Now"}
-                    </Button>
-                  </CardFooter>
-                </Card>
-              ))}
-            </div>
+                  return (
+                    <Card key={event.id} className="hover:shadow-elegant transition-all">
+                      <CardHeader>
+                        <div className="flex justify-between items-start mb-2">
+                          <Badge>{event.class_category || "Event"}</Badge>
+                        </div>
+                        <CardTitle className="text-2xl">{event.title}</CardTitle>
+                        <CardDescription>{event.description}</CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <div className="flex items-center gap-2">
+                          <Calendar className="h-4 w-4 text-muted-foreground" />
+                          <div>
+                            <p className="text-sm font-medium">
+                              {format(new Date(event.start_time), "MMMM d, yyyy")}
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                              {format(new Date(event.start_time), "h:mm a")}
+                              {event.end_time && ` - ${format(new Date(event.end_time), "h:mm a")}`}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-start gap-2">
+                          <MapPin className="h-4 w-4 text-muted-foreground mt-0.5" />
+                          <div>
+                            {event.venue_address && (
+                              <p className="text-sm">{event.venue_address}</p>
+                            )}
+                            {event.online_link && (
+                              <a 
+                                href={event.online_link} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="text-sm text-primary hover:underline"
+                              >
+                                Join Online
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex justify-between items-center pt-4 border-t">
+                          <span className="text-2xl font-bold text-primary">
+                            {event.price > 0 ? `${event.price} ${event.currency}` : "Free"}
+                          </span>
+                          {isBooked ? (
+                            <Button variant="outline" disabled>Booked</Button>
+                          ) : (
+                            <Button onClick={() => handleBook(event)}>Book Now</Button>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </section>
       </main>
-
       <Footer />
     </div>
   );
