@@ -6,6 +6,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
+import UserManagement from "@/components/admin/UserManagement";
+import ClassManagement from "@/components/admin/ClassManagement";
+import EventManagement from "@/components/admin/EventManagement";
 import { Users, Calendar, BookOpen, DollarSign } from "lucide-react";
 
 const Admin = () => {
@@ -137,36 +140,15 @@ const Admin = () => {
           </TabsContent>
 
           <TabsContent value="users">
-            <Card>
-              <CardHeader>
-                <CardTitle>User Management</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground">User management features coming soon</p>
-              </CardContent>
-            </Card>
+            <UserManagement />
           </TabsContent>
 
           <TabsContent value="classes">
-            <Card>
-              <CardHeader>
-                <CardTitle>Class Management</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground">Class management features coming soon</p>
-              </CardContent>
-            </Card>
+            <ClassManagement />
           </TabsContent>
 
           <TabsContent value="events">
-            <Card>
-              <CardHeader>
-                <CardTitle>Event Management</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground">Event management features coming soon</p>
-              </CardContent>
-            </Card>
+            <EventManagement />
           </TabsContent>
         </Tabs>
       </main>
