@@ -9,6 +9,8 @@ import Footer from "@/components/layout/Footer";
 import UserManagement from "@/components/admin/UserManagement";
 import ClassManagement from "@/components/admin/ClassManagement";
 import EventManagement from "@/components/admin/EventManagement";
+import AnalyticsDashboard from "@/components/admin/AnalyticsDashboard";
+import SampleDataManager from "@/components/admin/SampleDataManager";
 import { Users, Calendar, BookOpen, DollarSign } from "lucide-react";
 
 const Admin = () => {
@@ -123,20 +125,32 @@ const Admin = () => {
         <Tabs defaultValue="overview" className="space-y-4">
           <TabsList>
             <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="analytics">Analytics</TabsTrigger>
             <TabsTrigger value="users">Users</TabsTrigger>
             <TabsTrigger value="classes">Classes</TabsTrigger>
             <TabsTrigger value="events">Events</TabsTrigger>
+            <TabsTrigger value="data">Sample Data</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview">
             <Card>
               <CardHeader>
-                <CardTitle>Recent Activity</CardTitle>
+                <CardTitle>Admin Dashboard Overview</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-muted-foreground">Activity logs will be displayed here</p>
+                <p className="text-muted-foreground">
+                  Use the tabs above to manage users, classes, events, view analytics, and add sample data for testing.
+                </p>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="analytics">
+            <AnalyticsDashboard />
+          </TabsContent>
+
+          <TabsContent value="data">
+            <SampleDataManager />
           </TabsContent>
 
           <TabsContent value="users">

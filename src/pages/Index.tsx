@@ -125,7 +125,7 @@ const Index = () => {
                   asChild
                   className="bg-white text-primary hover:bg-white/90 border-0"
                 >
-                  <Link to="/signup">Get Started Now</Link>
+                  <Link to="/auth">Get Started Now</Link>
                 </Button>
               </CardContent>
             </Card>
