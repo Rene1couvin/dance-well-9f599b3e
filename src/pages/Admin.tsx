@@ -14,7 +14,7 @@ import SampleDataManager from "@/components/admin/SampleDataManager";
 import { Users, Calendar, BookOpen, DollarSign } from "lucide-react";
 
 const Admin = () => {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -26,8 +26,10 @@ const Admin = () => {
   });
 
   useEffect(() => {
-    checkAdminRole();
-  }, [user]);
+    if (!authLoading) {
+      checkAdminRole();
+    }
+  }, [user, authLoading]);
 
   const checkAdminRole = async () => {
     if (!user) {
@@ -42,11 +44,13 @@ const Admin = () => {
       .in("role", ["super_admin", "editor"]);
 
     if (error || !data || data.length === 0) {
+      console.error("Admin access denied:", error);
       navigate("/");
       return;
     }
 
     setIsAdmin(true);
+    setLoading(false);
     fetchStats();
   };
 
@@ -69,6 +73,14 @@ const Admin = () => {
 
     setLoading(false);
   };
+
+  if (authLoading || loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <p>Loading admin panel...</p>
+      </div>
+    );
+  }
 
   if (!isAdmin) {
     return null;
