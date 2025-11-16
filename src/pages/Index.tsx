@@ -3,10 +3,22 @@ import Footer from "@/components/layout/Footer";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Calendar, Users, Music, Award } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
 import heroImage from "@/assets/hero-dance.jpg";
 
 const Index = () => {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+
+  const handleGetStarted = () => {
+    if (user) {
+      navigate("/classes");
+    } else {
+      navigate("/auth");
+    }
+  };
+
   return (
     <div className="flex min-h-screen flex-col">
       <Header />
@@ -122,10 +134,10 @@ const Index = () => {
                 <Button 
                   size="lg" 
                   variant="outline" 
-                  asChild
+                  onClick={handleGetStarted}
                   className="bg-white text-primary hover:bg-white/90 border-0"
                 >
-                  <Link to="/auth">Get Started Now</Link>
+                  Get Started Now
                 </Button>
               </CardContent>
             </Card>
