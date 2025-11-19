@@ -10,6 +10,7 @@ import { useNavigate } from "react-router-dom";
 import { useEffect } from "react";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
+import { supabase } from "@/integrations/supabase/client";
 
 const Auth = () => {
   const { signUp, signIn, user } = useAuth();
@@ -36,6 +37,35 @@ const Auth = () => {
     email: "",
     password: "",
   });
+
+  const [resetEmail, setResetEmail] = useState("");
+  const [showResetForm, setShowResetForm] = useState(false);
+
+  const handlePasswordReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+
+    const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
+      redirectTo: `${window.location.origin}/auth`,
+    });
+
+    setLoading(false);
+
+    if (error) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "Check your email",
+        description: "We've sent you a password reset link.",
+      });
+      setShowResetForm(false);
+      setResetEmail("");
+    }
+  };
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -123,6 +153,46 @@ const Auth = () => {
                     <Button type="submit" className="w-full" disabled={loading}>
                       {loading ? "Signing in..." : "Sign In"}
                     </Button>
+                    
+                    <div className="text-center mt-4">
+                      <Button
+                        type="button"
+                        variant="link"
+                        onClick={() => setShowResetForm(!showResetForm)}
+                        className="text-sm"
+                      >
+                        Forgot your password?
+                      </Button>
+                    </div>
+
+                    {showResetForm && (
+                      <Card className="mt-4">
+                        <CardHeader>
+                          <CardTitle className="text-lg">Reset Password</CardTitle>
+                          <CardDescription>
+                            Enter your email to receive a password reset link
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          <form onSubmit={handlePasswordReset} className="space-y-4">
+                            <div className="space-y-2">
+                              <Label htmlFor="reset-email">Email</Label>
+                              <Input
+                                id="reset-email"
+                                type="email"
+                                placeholder="you@example.com"
+                                value={resetEmail}
+                                onChange={(e) => setResetEmail(e.target.value)}
+                                required
+                              />
+                            </div>
+                            <Button type="submit" className="w-full" disabled={loading}>
+                              {loading ? "Sending..." : "Send Reset Link"}
+                            </Button>
+                          </form>
+                        </CardContent>
+                      </Card>
+                    )}
                   </form>
                 </CardContent>
               </Card>
