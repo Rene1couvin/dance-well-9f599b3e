@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,9 +19,9 @@ const GalleryUpload = () => {
   const [eventId, setEventId] = useState("");
   const [events, setEvents] = useState<Array<{ id: string; title: string }>>([]);
 
-  useState(() => {
+  useEffect(() => {
     fetchEvents();
-  });
+  }, []);
 
   const fetchEvents = async () => {
     const { data } = await supabase
