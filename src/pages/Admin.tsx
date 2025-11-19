@@ -11,6 +11,8 @@ import ClassManagement from "@/components/admin/ClassManagement";
 import EventManagement from "@/components/admin/EventManagement";
 import AnalyticsDashboard from "@/components/admin/AnalyticsDashboard";
 import SampleDataManager from "@/components/admin/SampleDataManager";
+import ContactInbox from "@/components/admin/ContactInbox";
+import GalleryUpload from "@/components/admin/GalleryUpload";
 import { Users, Calendar, BookOpen, DollarSign } from "lucide-react";
 
 const Admin = () => {
@@ -135,12 +137,14 @@ const Admin = () => {
         </div>
 
         <Tabs defaultValue="overview" className="space-y-4">
-          <TabsList>
+          <TabsList className="flex flex-wrap h-auto">
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="analytics">Analytics</TabsTrigger>
             <TabsTrigger value="users">Users</TabsTrigger>
             <TabsTrigger value="classes">Classes</TabsTrigger>
             <TabsTrigger value="events">Events</TabsTrigger>
+            <TabsTrigger value="gallery">Gallery</TabsTrigger>
+            <TabsTrigger value="inbox">Contact Inbox</TabsTrigger>
             <TabsTrigger value="data">Sample Data</TabsTrigger>
           </TabsList>
 
@@ -175,6 +179,14 @@ const Admin = () => {
 
           <TabsContent value="events">
             <EventManagement />
+          </TabsContent>
+
+          <TabsContent value="gallery">
+            <GalleryUpload />
+          </TabsContent>
+
+          <TabsContent value="inbox">
+            <ContactInbox />
           </TabsContent>
         </Tabs>
       </main>
