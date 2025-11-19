@@ -37,16 +37,6 @@ const Contact = () => {
 
       if (dbError) throw dbError;
 
-      // Send email notification
-      const { error: emailError } = await supabase.functions.invoke("send-contact-email", {
-        body: formData,
-      });
-
-      if (emailError) {
-        console.error("Email error:", emailError);
-        // Don't fail the whole operation if email fails
-      }
-
       toast({
         title: "Message sent!",
         description: "Thank you for contacting us. We'll get back to you soon.",
