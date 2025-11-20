@@ -5,6 +5,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import { Button } from "@/components/ui/button";
+import { Printer } from "lucide-react";
+import { format } from "date-fns";
+import PrintButton from "./PrintButton";
 
 interface Profile {
   id: string;
@@ -86,11 +90,17 @@ export default function UserManagement() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>User Management</CardTitle>
-        <CardDescription>Manage user roles and permissions</CardDescription>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle>User Management</CardTitle>
+            <CardDescription>Manage user roles and permissions</CardDescription>
+          </div>
+          <PrintButton tableId="users-table" title="User Management" />
+        </div>
       </CardHeader>
       <CardContent>
-        <Table>
+        <div id="users-table">
+          <Table>
           <TableHeader>
             <TableRow>
               <TableHead>Name</TableHead>
@@ -130,8 +140,9 @@ export default function UserManagement() {
                 </TableCell>
               </TableRow>
             ))}
-          </TableBody>
-        </Table>
+            </TableBody>
+          </Table>
+        </div>
       </CardContent>
     </Card>
   );

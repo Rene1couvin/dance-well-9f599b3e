@@ -13,6 +13,7 @@ import AnalyticsDashboard from "@/components/admin/AnalyticsDashboard";
 import SampleDataManager from "@/components/admin/SampleDataManager";
 import ContactInbox from "@/components/admin/ContactInbox";
 import GalleryUpload from "@/components/admin/GalleryUpload";
+import BookingManagement from "@/components/admin/BookingManagement";
 import { Users, Calendar, BookOpen, DollarSign } from "lucide-react";
 
 const Admin = () => {
@@ -143,6 +144,7 @@ const Admin = () => {
             <TabsTrigger value="users">Users</TabsTrigger>
             <TabsTrigger value="classes">Classes</TabsTrigger>
             <TabsTrigger value="events">Events</TabsTrigger>
+            <TabsTrigger value="bookings">Bookings</TabsTrigger>
             <TabsTrigger value="gallery">Gallery</TabsTrigger>
             <TabsTrigger value="inbox">Contact Inbox</TabsTrigger>
             <TabsTrigger value="data">Sample Data</TabsTrigger>
@@ -179,6 +181,10 @@ const Admin = () => {
 
           <TabsContent value="events">
             <EventManagement />
+          </TabsContent>
+
+          <TabsContent value="bookings">
+            <BookingManagement />
           </TabsContent>
 
           <TabsContent value="gallery">
