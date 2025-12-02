@@ -120,23 +120,55 @@ export type Database = {
           },
         ]
       }
+      class_enrollment_schedule: {
+        Row: {
+          created_at: string | null
+          enrollment_id: string
+          id: string
+          selected_days: string[]
+        }
+        Insert: {
+          created_at?: string | null
+          enrollment_id: string
+          id?: string
+          selected_days: string[]
+        }
+        Update: {
+          created_at?: string | null
+          enrollment_id?: string
+          id?: string
+          selected_days?: string[]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "class_enrollment_schedule_enrollment_id_fkey"
+            columns: ["enrollment_id"]
+            isOneToOne: false
+            referencedRelation: "class_enrollments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       class_enrollments: {
         Row: {
           class_id: string
           enrolled_at: string
           id: string
+          payment_status: string | null
           user_id: string
         }
         Insert: {
           class_id: string
           enrolled_at?: string
           id?: string
+          payment_status?: string | null
           user_id: string
         }
         Update: {
           class_id?: string
           enrolled_at?: string
           id?: string
+          payment_status?: string | null
           user_id?: string
         }
         Relationships: [
@@ -151,48 +183,63 @@ export type Database = {
       }
       classes: {
         Row: {
+          available_days: string[] | null
           capacity: number
           category: Database["public"]["Enums"]["class_category"]
+          class_type: string | null
           created_at: string
           created_by: string
           currency: string | null
           description: string | null
+          fixed_days: string[] | null
           id: string
           is_active: boolean | null
           location: string | null
           price: number | null
+          private_price: number | null
+          regular_price: number | null
           schedule: string | null
           teacher_id: string | null
           title: string
           updated_at: string
         }
         Insert: {
+          available_days?: string[] | null
           capacity?: number
           category: Database["public"]["Enums"]["class_category"]
+          class_type?: string | null
           created_at?: string
           created_by: string
           currency?: string | null
           description?: string | null
+          fixed_days?: string[] | null
           id?: string
           is_active?: boolean | null
           location?: string | null
           price?: number | null
+          private_price?: number | null
+          regular_price?: number | null
           schedule?: string | null
           teacher_id?: string | null
           title: string
           updated_at?: string
         }
         Update: {
+          available_days?: string[] | null
           capacity?: number
           category?: Database["public"]["Enums"]["class_category"]
+          class_type?: string | null
           created_at?: string
           created_by?: string
           currency?: string | null
           description?: string | null
+          fixed_days?: string[] | null
           id?: string
           is_active?: boolean | null
           location?: string | null
           price?: number | null
+          private_price?: number | null
+          regular_price?: number | null
           schedule?: string | null
           teacher_id?: string | null
           title?: string
@@ -338,6 +385,66 @@ export type Database = {
             columns: ["event_id"]
             isOneToOne: false
             referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mobile_payments: {
+        Row: {
+          amount: number
+          booking_id: string | null
+          completed_at: string | null
+          created_at: string | null
+          currency: string | null
+          enrollment_id: string | null
+          id: string
+          payment_method: string
+          phone_number: string | null
+          status: string | null
+          user_id: string
+          ussd_code: string | null
+        }
+        Insert: {
+          amount: number
+          booking_id?: string | null
+          completed_at?: string | null
+          created_at?: string | null
+          currency?: string | null
+          enrollment_id?: string | null
+          id?: string
+          payment_method: string
+          phone_number?: string | null
+          status?: string | null
+          user_id: string
+          ussd_code?: string | null
+        }
+        Update: {
+          amount?: number
+          booking_id?: string | null
+          completed_at?: string | null
+          created_at?: string | null
+          currency?: string | null
+          enrollment_id?: string | null
+          id?: string
+          payment_method?: string
+          phone_number?: string | null
+          status?: string | null
+          user_id?: string
+          ussd_code?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mobile_payments_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mobile_payments_enrollment_id_fkey"
+            columns: ["enrollment_id"]
+            isOneToOne: false
+            referencedRelation: "class_enrollments"
             referencedColumns: ["id"]
           },
         ]

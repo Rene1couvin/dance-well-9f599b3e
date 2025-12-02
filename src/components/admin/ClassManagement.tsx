@@ -36,6 +36,11 @@ export default function ClassManagement() {
     price: number;
     capacity: number;
     location: string;
+    class_type: "regular" | "private";
+    regular_price: number;
+    private_price: number;
+    fixed_days: string[];
+    available_days: string[];
   }>({
     title: "",
     description: "",
@@ -44,6 +49,11 @@ export default function ClassManagement() {
     price: 0,
     capacity: 20,
     location: "",
+    class_type: "regular",
+    regular_price: 0,
+    private_price: 0,
+    fixed_days: [],
+    available_days: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
   });
   const { toast } = useToast();
 
@@ -93,7 +103,7 @@ export default function ClassManagement() {
     }
   };
 
-  const handleEdit = (classItem: Class) => {
+  const handleEdit = (classItem: any) => {
     setEditingClass(classItem);
     setFormData({
       title: classItem.title,
@@ -103,6 +113,11 @@ export default function ClassManagement() {
       price: classItem.price || 0,
       capacity: classItem.capacity,
       location: classItem.location || "",
+      class_type: classItem.class_type || "regular",
+      regular_price: classItem.regular_price || 0,
+      private_price: classItem.private_price || 0,
+      fixed_days: classItem.fixed_days || [],
+      available_days: classItem.available_days || ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
     });
     setShowForm(true);
   };
@@ -129,10 +144,26 @@ export default function ClassManagement() {
       price: 0,
       capacity: 20,
       location: "",
+      class_type: "regular",
+      regular_price: 0,
+      private_price: 0,
+      fixed_days: [],
+      available_days: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
     });
     setEditingClass(null);
     setShowForm(false);
   };
+
+  const toggleDay = (day: string, field: 'fixed_days' | 'available_days') => {
+    const currentDays = formData[field];
+    if (currentDays.includes(day)) {
+      setFormData({ ...formData, [field]: currentDays.filter(d => d !== day) });
+    } else {
+      setFormData({ ...formData, [field]: [...currentDays, day] });
+    }
+  };
+
+  const weekDays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
   return (
     <div className="space-y-6">
@@ -183,13 +214,80 @@ export default function ClassManagement() {
                 value={formData.schedule}
                 onChange={(e) => setFormData({ ...formData, schedule: e.target.value })}
               />
+              
+              <div>
+                <label className="block text-sm font-medium mb-2">Class Type</label>
+                <Select
+                  value={formData.class_type}
+                  onValueChange={(value) => setFormData({ ...formData, class_type: value as "regular" | "private" })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="regular">Regular</SelectItem>
+                    <SelectItem value="private">Private</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
               <div className="grid grid-cols-2 gap-4">
-                <Input
-                  type="number"
-                  placeholder="Price (RWF)"
-                  value={formData.price}
-                  onChange={(e) => setFormData({ ...formData, price: parseFloat(e.target.value) })}
-                />
+                <div>
+                  <label className="block text-sm font-medium mb-2">Regular Price (RWF)</label>
+                  <Input
+                    type="number"
+                    placeholder="Regular Price"
+                    value={formData.regular_price}
+                    onChange={(e) => setFormData({ ...formData, regular_price: parseFloat(e.target.value) })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-2">Private Price (RWF)</label>
+                  <Input
+                    type="number"
+                    placeholder="Private Price"
+                    value={formData.private_price}
+                    onChange={(e) => setFormData({ ...formData, private_price: parseFloat(e.target.value) })}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Fixed Days (Regular Classes)</label>
+                <div className="flex flex-wrap gap-2">
+                  {weekDays.map(day => (
+                    <Button
+                      key={day}
+                      type="button"
+                      size="sm"
+                      variant={formData.fixed_days.includes(day) ? "default" : "outline"}
+                      onClick={() => toggleDay(day, 'fixed_days')}
+                    >
+                      {day}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Available Days (Private Classes)</label>
+                <div className="flex flex-wrap gap-2">
+                  {weekDays.map(day => (
+                    <Button
+                      key={day}
+                      type="button"
+                      size="sm"
+                      variant={formData.available_days.includes(day) ? "default" : "outline"}
+                      onClick={() => toggleDay(day, 'available_days')}
+                    >
+                      {day}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Capacity</label>
                 <Input
                   type="number"
                   placeholder="Capacity"
