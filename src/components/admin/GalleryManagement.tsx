@@ -182,13 +182,13 @@ export default function GalleryManagement() {
                       <label className="block text-sm font-medium mb-2">Event (Optional)</label>
                       <Select
                         value={uploadForm.event_id}
-                        onValueChange={(value) => setUploadForm({ ...uploadForm, event_id: value })}
+                        onValueChange={(value) => setUploadForm({ ...uploadForm, event_id: value === "none" ? "" : value })}
                       >
                         <SelectTrigger>
                           <SelectValue placeholder="Select an event" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="">None</SelectItem>
+                          <SelectItem value="none">None</SelectItem>
                           {events.map((event) => (
                             <SelectItem key={event.id} value={event.id}>
                               {event.title}
