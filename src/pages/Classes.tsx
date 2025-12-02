@@ -8,6 +8,11 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import MobilePayment from "@/components/MobilePayment";
 
 const Classes = () => {
   const { user } = useAuth();
@@ -16,6 +21,12 @@ const Classes = () => {
   const [classes, setClasses] = useState<any[]>([]);
   const [enrollments, setEnrollments] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showEnrollDialog, setShowEnrollDialog] = useState(false);
+  const [selectedClass, setSelectedClass] = useState<any>(null);
+  const [enrollmentType, setEnrollmentType] = useState<"regular" | "private">("regular");
+  const [selectedDays, setSelectedDays] = useState<string[]>([]);
+  const [showPayment, setShowPayment] = useState(false);
+  const [enrollmentId, setEnrollmentId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchClasses();
@@ -59,31 +70,61 @@ const Classes = () => {
     }
   };
 
-  const handleEnroll = async (classId: string) => {
+  const handleEnrollClick = (classItem: any) => {
     if (!user) {
       navigate("/auth");
       return;
     }
+    setSelectedClass(classItem);
+    setEnrollmentType("regular");
+    setSelectedDays([]);
+    setShowEnrollDialog(true);
+  };
 
-    const { error } = await supabase
-      .from("class_enrollments")
-      .insert({ user_id: user.id, class_id: classId });
+  const handleConfirmEnrollment = async () => {
+    if (!user || !selectedClass) return;
 
-    if (error) {
+    // Validate day selection for private classes
+    if (enrollmentType === "private" && selectedDays.length === 0) {
       toast({
         title: "Error",
-        description: error.message,
+        description: "Please select at least one day",
         variant: "destructive",
       });
       return;
     }
 
-    toast({
-      title: "Success",
-      description: "You've enrolled in the class!",
-    });
+    // Create enrollment
+    const { data: enrollment, error: enrollError } = await supabase
+      .from("class_enrollments")
+      .insert({
+        user_id: user.id,
+        class_id: selectedClass.id,
+        payment_status: "pending",
+      })
+      .select()
+      .single();
 
-    fetchEnrollments();
+    if (enrollError) {
+      toast({
+        title: "Error",
+        description: enrollError.message,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Save schedule for private classes
+    if (enrollmentType === "private" && enrollment) {
+      await supabase.from("class_enrollment_schedule").insert({
+        enrollment_id: enrollment.id,
+        selected_days: selectedDays,
+      });
+    }
+
+    setEnrollmentId(enrollment.id);
+    setShowEnrollDialog(false);
+    setShowPayment(true);
   };
 
   const handleUnenroll = async (classId: string) => {
@@ -110,6 +151,19 @@ const Classes = () => {
     });
 
     fetchEnrollments();
+  };
+
+  const toggleDay = (day: string) => {
+    if (selectedDays.includes(day)) {
+      setSelectedDays(selectedDays.filter(d => d !== day));
+    } else {
+      setSelectedDays([...selectedDays, day]);
+    }
+  };
+
+  const getPrice = () => {
+    if (!selectedClass) return 0;
+    return enrollmentType === "regular" ? selectedClass.regular_price : selectedClass.private_price;
   };
 
   return (
@@ -155,16 +209,17 @@ const Classes = () => {
                           <p className="text-sm font-medium">Location</p>
                           <p className="text-sm text-muted-foreground">{classItem.location || "TBA"}</p>
                         </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-2xl font-bold text-primary">
-                            {classItem.price > 0 ? `${classItem.price} ${classItem.currency}` : "Free"}
-                          </span>
+                        <div className="space-y-2">
+                          <div className="flex justify-between text-sm">
+                            <span>Regular: {classItem.regular_price} {classItem.currency}</span>
+                            <span>Private: {classItem.private_price} {classItem.currency}</span>
+                          </div>
                           {isEnrolled ? (
-                            <Button variant="outline" onClick={() => handleUnenroll(classItem.id)}>
+                            <Button variant="outline" onClick={() => handleUnenroll(classItem.id)} className="w-full">
                               Unenroll
                             </Button>
                           ) : (
-                            <Button onClick={() => handleEnroll(classItem.id)}>
+                            <Button onClick={() => handleEnrollClick(classItem)} className="w-full">
                               Enroll Now
                             </Button>
                           )}
@@ -179,6 +234,92 @@ const Classes = () => {
         </section>
       </main>
       <Footer />
+
+      {/* Enrollment Dialog */}
+      <Dialog open={showEnrollDialog} onOpenChange={setShowEnrollDialog}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Enroll in {selectedClass?.title}</DialogTitle>
+            <DialogDescription>
+              Choose your class type and schedule
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <label className="block text-sm font-medium mb-2">Class Type</label>
+              <RadioGroup value={enrollmentType} onValueChange={(value: any) => setEnrollmentType(value)}>
+                <div className="flex items-center space-x-2 p-3 border rounded-lg">
+                  <RadioGroupItem value="regular" id="regular" />
+                  <Label htmlFor="regular" className="flex-1">
+                    <div>
+                      <div className="font-medium">Regular Class</div>
+                      <div className="text-sm text-muted-foreground">
+                        Fixed days: {selectedClass?.fixed_days?.join(", ")}
+                      </div>
+                      <div className="text-sm font-bold text-primary">
+                        {selectedClass?.regular_price} {selectedClass?.currency}
+                      </div>
+                    </div>
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2 p-3 border rounded-lg">
+                  <RadioGroupItem value="private" id="private" />
+                  <Label htmlFor="private" className="flex-1">
+                    <div>
+                      <div className="font-medium">Private Class</div>
+                      <div className="text-sm text-muted-foreground">Choose your own days</div>
+                      <div className="text-sm font-bold text-primary">
+                        {selectedClass?.private_price} {selectedClass?.currency}
+                      </div>
+                    </div>
+                  </Label>
+                </div>
+              </RadioGroup>
+            </div>
+
+            {enrollmentType === "private" && (
+              <div>
+                <label className="block text-sm font-medium mb-2">Select Days</label>
+                <div className="space-y-2">
+                  {selectedClass?.available_days?.map((day: string) => (
+                    <div key={day} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={day}
+                        checked={selectedDays.includes(day)}
+                        onCheckedChange={() => toggleDay(day)}
+                      />
+                      <Label htmlFor={day}>{day}</Label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <Button onClick={handleConfirmEnrollment} className="w-full">
+              Confirm Enrollment ({getPrice()} {selectedClass?.currency})
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Payment Dialog */}
+      <Dialog open={showPayment} onOpenChange={setShowPayment}>
+        <DialogContent className="sm:max-w-[500px]">
+          <MobilePayment
+            amount={getPrice()}
+            enrollmentId={enrollmentId || undefined}
+            userId={user?.id || ""}
+            onPaymentInitiated={() => {
+              setShowPayment(false);
+              toast({
+                title: "Enrollment Pending",
+                description: "Complete payment to activate your enrollment",
+              });
+              fetchEnrollments();
+            }}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
