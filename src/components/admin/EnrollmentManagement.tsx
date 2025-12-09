@@ -5,7 +5,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Printer, Trash2 } from "lucide-react";
+import { Printer, Trash2, Check } from "lucide-react";
 import { format } from "date-fns";
 
 interface EnrollmentWithDetails {
@@ -96,6 +96,27 @@ export default function EnrollmentManagement() {
     }
 
     setLoading(false);
+  };
+
+  const handleConfirm = async (enrollmentId: string) => {
+    const { error } = await supabase
+      .from("class_enrollments")
+      .update({ payment_status: "paid" })
+      .eq("id", enrollmentId);
+
+    if (error) {
+      toast({
+        title: "Error",
+        description: "Failed to confirm enrollment",
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "Success",
+        description: "Enrollment confirmed successfully",
+      });
+      fetchEnrollments();
+    }
   };
 
   const handleDelete = async (enrollmentId: string) => {
@@ -194,6 +215,18 @@ export default function EnrollmentManagement() {
     return "Regular";
   };
 
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case "paid":
+      case "confirmed":
+        return <Badge className="bg-green-500 hover:bg-green-600">Confirmed</Badge>;
+      case "pending":
+        return <Badge className="bg-yellow-500 hover:bg-yellow-600 text-black">Pending</Badge>;
+      default:
+        return <Badge variant="secondary">{status || "pending"}</Badge>;
+    }
+  };
+
   if (loading) {
     return <div>Loading enrollments...</div>;
   }
@@ -225,15 +258,16 @@ export default function EnrollmentManagement() {
                 <TableHead>Type</TableHead>
                 <TableHead>Schedule</TableHead>
                 <TableHead>Price</TableHead>
-                <TableHead>Payment Status</TableHead>
+                <TableHead>Payment Method</TableHead>
+                <TableHead>Status</TableHead>
                 <TableHead>Enrolled On</TableHead>
-                {userRole === "super_admin" && <TableHead>Actions</TableHead>}
+                <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {enrollments.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={userRole === "super_admin" ? 11 : 10} className="text-center">
+                  <TableCell colSpan={12} className="text-center">
                     No enrollments found
                   </TableCell>
                 </TableRow>
@@ -259,30 +293,37 @@ export default function EnrollmentManagement() {
                     <TableCell className="text-sm">{getSchedule(enrollment)}</TableCell>
                     <TableCell>{getPrice(enrollment)}</TableCell>
                     <TableCell>
-                      <Badge 
-                        variant={
-                          enrollment.payment_status === "paid"
-                            ? "default"
-                            : "secondary"
-                        }
-                      >
-                        {enrollment.payment_status || "pending"}
-                      </Badge>
+                      <Badge variant="outline">Mobile Money</Badge>
+                    </TableCell>
+                    <TableCell>
+                      {getStatusBadge(enrollment.payment_status)}
                     </TableCell>
                     <TableCell>
                       {format(new Date(enrollment.enrolled_at), "PPP")}
                     </TableCell>
-                    {userRole === "super_admin" && (
-                      <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDelete(enrollment.id)}
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </TableCell>
-                    )}
+                    <TableCell>
+                      <div className="flex gap-2">
+                        {enrollment.payment_status === "pending" && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleConfirm(enrollment.id)}
+                            title="Confirm Enrollment"
+                          >
+                            <Check className="h-4 w-4 text-green-600" />
+                          </Button>
+                        )}
+                        {userRole === "super_admin" && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDelete(enrollment.id)}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        )}
+                      </div>
+                    </TableCell>
                   </TableRow>
                 ))
               )}

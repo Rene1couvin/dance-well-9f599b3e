@@ -6,18 +6,23 @@ import Footer from "@/components/layout/Footer";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, MapPin } from "lucide-react";
+import { Calendar, MapPin, CreditCard } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
+import MobilePayment from "@/components/MobilePayment";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 
 const Events = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
   const [events, setEvents] = useState<any[]>([]);
-  const [bookings, setBookings] = useState<string[]>([]);
+  const [bookings, setBookings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showPayment, setShowPayment] = useState(false);
+  const [selectedEvent, setSelectedEvent] = useState<any>(null);
+  const [bookingId, setBookingId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchEvents();
@@ -52,12 +57,17 @@ const Events = () => {
 
     const { data } = await supabase
       .from("bookings")
-      .select("event_id")
+      .select("event_id, status")
       .eq("user_id", user.id);
 
     if (data) {
-      setBookings(data.map((b) => b.event_id));
+      setBookings(data);
     }
+  };
+
+  const getBookingStatus = (eventId: string) => {
+    const booking = bookings.find((b) => b.event_id === eventId);
+    return booking ? booking.status : null;
   };
 
   const handleBook = async (event: any) => {
@@ -66,40 +76,84 @@ const Events = () => {
       return;
     }
 
-    // If event has payment, redirect to payment URL
-    if (event.is_paid && event.payment_redirect_url) {
-      window.location.href = event.payment_redirect_url;
-      return;
-    }
-
-    // Otherwise, create booking directly
-    const { error } = await supabase
-      .from("bookings")
-      .insert({
-        user_id: user.id,
-        event_id: event.id,
-        status: event.is_paid ? "pending" : "confirmed",
-        amount: event.price,
-        currency: event.currency,
-      });
-
-    if (error) {
+    // Check if already booked
+    const existingBooking = bookings.find((b) => b.event_id === event.id);
+    if (existingBooking) {
       toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
+        title: "Already Booked",
+        description: "You have already booked this event",
       });
       return;
     }
 
-    toast({
-      title: "Success",
-      description: event.is_paid
-        ? "Your booking is pending payment"
-        : "You've successfully booked this event!",
-    });
+    // If event is paid, create pending booking and show payment
+    if (event.is_paid && event.price > 0) {
+      const { data: booking, error } = await supabase
+        .from("bookings")
+        .insert({
+          user_id: user.id,
+          event_id: event.id,
+          status: "pending",
+          amount: event.price,
+          currency: event.currency,
+        })
+        .select()
+        .single();
 
-    fetchBookings();
+      if (error) {
+        toast({
+          title: "Error",
+          description: error.message,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      setSelectedEvent(event);
+      setBookingId(booking.id);
+      setShowPayment(true);
+    } else {
+      // Free event - create confirmed booking directly
+      const { error } = await supabase
+        .from("bookings")
+        .insert({
+          user_id: user.id,
+          event_id: event.id,
+          status: "pending", // Still pending until admin confirms
+          amount: 0,
+          currency: event.currency,
+        });
+
+      if (error) {
+        toast({
+          title: "Error",
+          description: error.message,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      toast({
+        title: "Booking Submitted",
+        description: "Your booking is pending admin confirmation",
+      });
+
+      fetchBookings();
+    }
+  };
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case "confirmed":
+      case "paid":
+        return <Badge className="bg-green-500 hover:bg-green-600">Confirmed</Badge>;
+      case "pending":
+        return <Badge className="bg-yellow-500 hover:bg-yellow-600 text-black">Pending</Badge>;
+      case "canceled":
+        return <Badge variant="destructive">Canceled</Badge>;
+      default:
+        return <Badge variant="secondary">{status}</Badge>;
+    }
   };
 
   return (
@@ -120,13 +174,14 @@ const Events = () => {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 {events.map((event) => {
-                  const isBooked = bookings.includes(event.id);
+                  const bookingStatus = getBookingStatus(event.id);
                   
                   return (
                     <Card key={event.id} className="hover:shadow-elegant transition-all">
                       <CardHeader>
                         <div className="flex justify-between items-start mb-2">
                           <Badge>{event.class_category || "Event"}</Badge>
+                          {bookingStatus && getStatusBadge(bookingStatus)}
                         </div>
                         <CardTitle className="text-2xl">{event.title}</CardTitle>
                         <CardDescription>{event.description}</CardDescription>
@@ -162,14 +217,27 @@ const Events = () => {
                             )}
                           </div>
                         </div>
+                        
+                        {/* Payment Method Display */}
+                        {event.is_paid && event.price > 0 && (
+                          <div className="flex items-center gap-2">
+                            <CreditCard className="h-4 w-4 text-muted-foreground" />
+                            <p className="text-sm text-muted-foreground">
+                              Payment: MTN Mobile Money / Tigo Cash
+                            </p>
+                          </div>
+                        )}
+                        
                         <div className="flex justify-between items-center pt-4 border-t">
                           <span className="text-2xl font-bold text-primary">
                             {event.price > 0 ? `${event.price} ${event.currency}` : "Free"}
                           </span>
-                          {isBooked ? (
-                            <Button variant="outline" disabled>Booked</Button>
+                          {bookingStatus ? (
+                            getStatusBadge(bookingStatus)
                           ) : (
-                            <Button onClick={() => handleBook(event)}>Book Now</Button>
+                            <Button onClick={() => handleBook(event)}>
+                              {user ? "Book Now" : "Sign in to Book"}
+                            </Button>
                           )}
                         </div>
                       </CardContent>
@@ -182,6 +250,25 @@ const Events = () => {
         </section>
       </main>
       <Footer />
+
+      {/* Payment Dialog */}
+      <Dialog open={showPayment} onOpenChange={setShowPayment}>
+        <DialogContent className="sm:max-w-[500px]">
+          <MobilePayment
+            amount={selectedEvent?.price || 0}
+            bookingId={bookingId || undefined}
+            userId={user?.id || ""}
+            onPaymentInitiated={() => {
+              setShowPayment(false);
+              toast({
+                title: "Booking Pending",
+                description: "Complete payment and wait for admin confirmation",
+              });
+              fetchBookings();
+            }}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

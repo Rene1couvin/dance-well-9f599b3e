@@ -5,7 +5,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Printer, Trash2 } from "lucide-react";
+import { Printer, Trash2, Check } from "lucide-react";
 import { format } from "date-fns";
 
 interface BookingWithDetails {
@@ -84,6 +84,27 @@ export default function BookingManagement() {
     setLoading(false);
   };
 
+  const handleConfirm = async (bookingId: string) => {
+    const { error } = await supabase
+      .from("bookings")
+      .update({ status: "confirmed" })
+      .eq("id", bookingId);
+
+    if (error) {
+      toast({
+        title: "Error",
+        description: "Failed to confirm booking",
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "Success",
+        description: "Booking confirmed successfully",
+      });
+      fetchBookings();
+    }
+  };
+
   const handleDelete = async (bookingId: string) => {
     if (userRole !== "super_admin") {
       toast({
@@ -155,6 +176,20 @@ export default function BookingManagement() {
     printWindow.print();
   };
 
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case "confirmed":
+      case "paid":
+        return <Badge className="bg-green-500 hover:bg-green-600">Confirmed</Badge>;
+      case "pending":
+        return <Badge className="bg-yellow-500 hover:bg-yellow-600 text-black">Pending</Badge>;
+      case "canceled":
+        return <Badge variant="destructive">Canceled</Badge>;
+      default:
+        return <Badge variant="secondary">{status}</Badge>;
+    }
+  };
+
   if (loading) {
     return <div>Loading bookings...</div>;
   }
@@ -183,15 +218,16 @@ export default function BookingManagement() {
                 <TableHead>Event</TableHead>
                 <TableHead>Event Date</TableHead>
                 <TableHead>Amount</TableHead>
+                <TableHead>Payment Method</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Booked On</TableHead>
-                {userRole === "super_admin" && <TableHead>Actions</TableHead>}
+                <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {bookings.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={userRole === "super_admin" ? 8 : 7} className="text-center">
+                  <TableCell colSpan={9} className="text-center">
                     No bookings found
                   </TableCell>
                 </TableRow>
@@ -211,32 +247,37 @@ export default function BookingManagement() {
                     </TableCell>
                     <TableCell>{booking.amount} RWF</TableCell>
                     <TableCell>
-                      <Badge 
-                        variant={
-                          booking.status === "paid" || booking.status === "confirmed"
-                            ? "default"
-                            : booking.status === "pending"
-                            ? "secondary"
-                            : "destructive"
-                        }
-                      >
-                        {booking.status}
-                      </Badge>
+                      <Badge variant="outline">Mobile Money</Badge>
+                    </TableCell>
+                    <TableCell>
+                      {getStatusBadge(booking.status)}
                     </TableCell>
                     <TableCell>
                       {format(new Date(booking.created_at), "PPP")}
                     </TableCell>
-                    {userRole === "super_admin" && (
-                      <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDelete(booking.id)}
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </TableCell>
-                    )}
+                    <TableCell>
+                      <div className="flex gap-2">
+                        {booking.status === "pending" && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleConfirm(booking.id)}
+                            title="Confirm Booking"
+                          >
+                            <Check className="h-4 w-4 text-green-600" />
+                          </Button>
+                        )}
+                        {userRole === "super_admin" && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDelete(booking.id)}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        )}
+                      </div>
+                    </TableCell>
                   </TableRow>
                 ))
               )}

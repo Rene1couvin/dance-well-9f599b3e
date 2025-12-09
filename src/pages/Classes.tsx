@@ -30,8 +30,13 @@ const Classes = () => {
 
   useEffect(() => {
     fetchClasses();
+  }, []);
+
+  useEffect(() => {
     if (user) {
       fetchEnrollments();
+    } else {
+      setEnrollments([]);
     }
   }, [user]);
 
