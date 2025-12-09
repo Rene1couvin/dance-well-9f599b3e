@@ -1,18 +1,38 @@
 import { Button } from "@/components/ui/button";
 import { Menu, User } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 
 const Header = () => {
   const { user } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [username, setUsername] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (user) {
+      fetchProfile();
+    }
+  }, [user]);
+
+  const fetchProfile = async () => {
+    if (!user) return;
+    const { data } = await supabase
+      .from("profiles")
+      .select("username, first_name")
+      .eq("id", user.id)
+      .single();
+    if (data) {
+      setUsername(data.username || data.first_name);
+    }
+  };
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <nav className="container flex h-16 items-center justify-between">
         <Link to="/" className="flex items-center space-x-2">
-          <span className="text-2xl font-bold bg-gradient-primary bg-clip-text text-transparent">
+          <span className="text-2xl font-bold bg-gradient-primary bg-clip-text text-transparent cursor-pointer">
             Dance Well
           </span>
         </Link>
@@ -44,7 +64,7 @@ const Header = () => {
             <Button variant="ghost" asChild>
               <Link to="/profile">
                 <User className="h-4 w-4 mr-2" />
-                Profile
+                {username || "Profile"}
               </Link>
             </Button>
           ) : (
@@ -119,7 +139,7 @@ const Header = () => {
             <div className="flex flex-col gap-2 pt-4 border-t">
               {user ? (
                 <Button variant="ghost" asChild onClick={() => setMobileMenuOpen(false)}>
-                  <Link to="/profile">Profile</Link>
+                  <Link to="/profile">{username || "Profile"}</Link>
                 </Button>
               ) : (
                 <>
