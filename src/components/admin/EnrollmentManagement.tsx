@@ -26,6 +26,8 @@ interface EnrollmentWithDetails {
     regular_price: number;
     private_price: number;
     class_type: string;
+    schedule: string;
+    location: string;
   };
   class_enrollment_schedule?: {
     selected_days: string[];
@@ -76,7 +78,9 @@ export default function EnrollmentManagement() {
           category,
           regular_price,
           private_price,
-          class_type
+          class_type,
+          schedule,
+          location
         ),
         class_enrollment_schedule (
           selected_days
@@ -98,11 +102,62 @@ export default function EnrollmentManagement() {
     setLoading(false);
   };
 
-  const handleConfirm = async (enrollmentId: string) => {
+  const getClassType = (enrollment: EnrollmentWithDetails) => {
+    if (enrollment.class_enrollment_schedule && enrollment.class_enrollment_schedule.length > 0) {
+      return "Private";
+    }
+    return "Regular";
+  };
+
+  const getSchedule = (enrollment: EnrollmentWithDetails) => {
+    if (enrollment.class_enrollment_schedule && enrollment.class_enrollment_schedule.length > 0) {
+      return enrollment.class_enrollment_schedule[0].selected_days.join(", ");
+    }
+    return "Fixed Schedule";
+  };
+
+  const getPrice = (enrollment: EnrollmentWithDetails) => {
+    const classData = enrollment.classes;
+    if (!classData) return 0;
+    
+    if (enrollment.class_enrollment_schedule && enrollment.class_enrollment_schedule.length > 0) {
+      return classData.private_price || 0;
+    }
+    return classData.regular_price || 0;
+  };
+
+  const sendConfirmationEmail = async (enrollment: EnrollmentWithDetails) => {
+    try {
+      const classType = getClassType(enrollment);
+      const schedule = getSchedule(enrollment);
+      const price = getPrice(enrollment);
+
+      const { error } = await supabase.functions.invoke("send-confirmation-email", {
+        body: {
+          type: "enrollment",
+          userId: enrollment.user_id,
+          itemTitle: enrollment.classes?.title || "Class",
+          itemDetails: `Type: ${classType} | Schedule: ${schedule}${enrollment.classes?.location ? ` | Location: ${enrollment.classes.location}` : ""}`,
+          amount: price,
+          currency: "RWF",
+        },
+      });
+
+      if (error) {
+        console.error("Error sending email:", error);
+      } else {
+        console.log("Confirmation email sent successfully");
+      }
+    } catch (error) {
+      console.error("Error invoking email function:", error);
+    }
+  };
+
+  const handleConfirm = async (enrollment: EnrollmentWithDetails) => {
     const { error } = await supabase
       .from("class_enrollments")
       .update({ payment_status: "paid" })
-      .eq("id", enrollmentId);
+      .eq("id", enrollment.id);
 
     if (error) {
       toast({
@@ -115,6 +170,10 @@ export default function EnrollmentManagement() {
         title: "Success",
         description: "Enrollment confirmed successfully",
       });
+      
+      // Send confirmation email
+      sendConfirmationEmail(enrollment);
+      
       fetchEnrollments();
     }
   };
@@ -170,9 +229,6 @@ export default function EnrollmentManagement() {
             th { background-color: #ff6b35; color: white; }
             tr:nth-child(even) { background-color: #f9f9f9; }
             .header { display: flex; justify-content: space-between; align-items: center; }
-            .badge { padding: 4px 8px; border-radius: 4px; font-size: 12px; }
-            .badge-pending { background-color: #fef3c7; color: #92400e; }
-            .badge-paid { background-color: #d1fae5; color: #065f46; }
           </style>
         </head>
         <body>
@@ -187,32 +243,6 @@ export default function EnrollmentManagement() {
 
     printWindow.document.close();
     printWindow.print();
-  };
-
-  const getPrice = (enrollment: EnrollmentWithDetails) => {
-    const classData = enrollment.classes;
-    if (!classData) return "N/A";
-    
-    // If private class (has custom schedule), use private price
-    if (enrollment.class_enrollment_schedule && enrollment.class_enrollment_schedule.length > 0) {
-      return `${classData.private_price || 0} RWF`;
-    }
-    // Otherwise use regular price
-    return `${classData.regular_price || 0} RWF`;
-  };
-
-  const getSchedule = (enrollment: EnrollmentWithDetails) => {
-    if (enrollment.class_enrollment_schedule && enrollment.class_enrollment_schedule.length > 0) {
-      return enrollment.class_enrollment_schedule[0].selected_days.join(", ");
-    }
-    return "Fixed Schedule";
-  };
-
-  const getClassType = (enrollment: EnrollmentWithDetails) => {
-    if (enrollment.class_enrollment_schedule && enrollment.class_enrollment_schedule.length > 0) {
-      return "Private";
-    }
-    return "Regular";
   };
 
   const getStatusBadge = (status: string) => {
@@ -291,7 +321,7 @@ export default function EnrollmentManagement() {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-sm">{getSchedule(enrollment)}</TableCell>
-                    <TableCell>{getPrice(enrollment)}</TableCell>
+                    <TableCell>{getPrice(enrollment)} RWF</TableCell>
                     <TableCell>
                       <Badge variant="outline">Mobile Money</Badge>
                     </TableCell>
@@ -307,7 +337,7 @@ export default function EnrollmentManagement() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleConfirm(enrollment.id)}
+                            onClick={() => handleConfirm(enrollment)}
                             title="Confirm Enrollment"
                           >
                             <Check className="h-4 w-4 text-green-600" />

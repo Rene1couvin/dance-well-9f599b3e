@@ -23,6 +23,7 @@ interface BookingWithDetails {
   events: {
     title: string;
     start_time: string;
+    venue_address: string;
   };
 }
 
@@ -66,7 +67,8 @@ export default function BookingManagement() {
         ),
         events:event_id (
           title,
-          start_time
+          start_time,
+          venue_address
         )
       `)
       .order("created_at", { ascending: false });
@@ -84,11 +86,36 @@ export default function BookingManagement() {
     setLoading(false);
   };
 
-  const handleConfirm = async (bookingId: string) => {
+  const sendConfirmationEmail = async (booking: BookingWithDetails) => {
+    try {
+      const { error } = await supabase.functions.invoke("send-confirmation-email", {
+        body: {
+          type: "booking",
+          userId: booking.user_id,
+          itemTitle: booking.events?.title || "Event",
+          itemDetails: booking.events?.start_time 
+            ? `Date: ${format(new Date(booking.events.start_time), "PPP 'at' h:mm a")}${booking.events?.venue_address ? ` | Location: ${booking.events.venue_address}` : ""}`
+            : undefined,
+          amount: booking.amount,
+          currency: "RWF",
+        },
+      });
+
+      if (error) {
+        console.error("Error sending email:", error);
+      } else {
+        console.log("Confirmation email sent successfully");
+      }
+    } catch (error) {
+      console.error("Error invoking email function:", error);
+    }
+  };
+
+  const handleConfirm = async (booking: BookingWithDetails) => {
     const { error } = await supabase
       .from("bookings")
       .update({ status: "confirmed" })
-      .eq("id", bookingId);
+      .eq("id", booking.id);
 
     if (error) {
       toast({
@@ -101,6 +128,10 @@ export default function BookingManagement() {
         title: "Success",
         description: "Booking confirmed successfully",
       });
+      
+      // Send confirmation email
+      sendConfirmationEmail(booking);
+      
       fetchBookings();
     }
   };
@@ -156,10 +187,6 @@ export default function BookingManagement() {
             th { background-color: #ff6b35; color: white; }
             tr:nth-child(even) { background-color: #f9f9f9; }
             .header { display: flex; justify-content: space-between; align-items: center; }
-            .badge { padding: 4px 8px; border-radius: 4px; font-size: 12px; }
-            .badge-pending { background-color: #fef3c7; color: #92400e; }
-            .badge-paid { background-color: #d1fae5; color: #065f46; }
-            .badge-confirmed { background-color: #dbeafe; color: #1e40af; }
           </style>
         </head>
         <body>
@@ -261,7 +288,7 @@ export default function BookingManagement() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleConfirm(booking.id)}
+                            onClick={() => handleConfirm(booking)}
                             title="Confirm Booking"
                           >
                             <Check className="h-4 w-4 text-green-600" />
