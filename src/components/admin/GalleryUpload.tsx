@@ -76,7 +76,7 @@ const GalleryUpload = () => {
           url: publicUrl,
           type: selectedFile.type.startsWith("image/") ? "image" : "video",
           caption: caption || null,
-          event_id: eventId || null,
+          event_id: eventId && eventId !== "none" ? eventId : null,
           uploaded_by: user.id,
         }]);
 
@@ -152,7 +152,7 @@ const GalleryUpload = () => {
                 <SelectValue placeholder="Select an event" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">None</SelectItem>
+                <SelectItem value="none">None</SelectItem>
                 {events.map((event) => (
                   <SelectItem key={event.id} value={event.id}>
                     {event.title}
