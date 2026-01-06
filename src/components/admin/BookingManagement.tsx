@@ -4,8 +4,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Printer, Trash2, Check } from "lucide-react";
+import { Printer, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 
 interface BookingWithDetails {
@@ -132,26 +133,28 @@ export default function BookingManagement() {
     }
   };
 
-  const handleConfirm = async (booking: BookingWithDetails) => {
+  const handleStatusChange = async (booking: BookingWithDetails, newStatus: "pending" | "confirmed" | "paid" | "canceled" | "refunded") => {
     const { error } = await supabase
       .from("bookings")
-      .update({ status: "confirmed" })
+      .update({ status: newStatus })
       .eq("id", booking.id);
 
     if (error) {
       toast({
         title: "Error",
-        description: "Failed to confirm booking",
+        description: "Failed to update booking status",
         variant: "destructive",
       });
     } else {
       toast({
         title: "Success",
-        description: "Booking confirmed successfully",
+        description: `Booking status updated to ${newStatus}`,
       });
       
-      // Send confirmation email
-      sendConfirmationEmail(booking);
+      // Send confirmation email when status changes to confirmed or paid
+      if (newStatus === "confirmed" || newStatus === "paid") {
+        sendConfirmationEmail(booking);
+      }
       
       fetchBookings();
     }
@@ -298,23 +301,52 @@ export default function BookingManagement() {
                       <Badge variant="outline">Mobile Money</Badge>
                     </TableCell>
                     <TableCell>
-                      {getStatusBadge(booking.status)}
+                      <Select
+                        value={booking.status}
+                        onValueChange={(value: "pending" | "confirmed" | "paid" | "canceled" | "refunded") => handleStatusChange(booking, value)}
+                      >
+                        <SelectTrigger className="w-[130px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="pending">
+                            <span className="flex items-center gap-2">
+                              <span className="h-2 w-2 rounded-full bg-yellow-500" />
+                              Pending
+                            </span>
+                          </SelectItem>
+                          <SelectItem value="confirmed">
+                            <span className="flex items-center gap-2">
+                              <span className="h-2 w-2 rounded-full bg-green-500" />
+                              Confirmed
+                            </span>
+                          </SelectItem>
+                          <SelectItem value="paid">
+                            <span className="flex items-center gap-2">
+                              <span className="h-2 w-2 rounded-full bg-green-500" />
+                              Paid
+                            </span>
+                          </SelectItem>
+                          <SelectItem value="canceled">
+                            <span className="flex items-center gap-2">
+                              <span className="h-2 w-2 rounded-full bg-red-500" />
+                              Canceled
+                            </span>
+                          </SelectItem>
+                          <SelectItem value="refunded">
+                            <span className="flex items-center gap-2">
+                              <span className="h-2 w-2 rounded-full bg-gray-500" />
+                              Refunded
+                            </span>
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
                     </TableCell>
                     <TableCell>
                       {format(new Date(booking.created_at), "PPP")}
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-2">
-                        {booking.status === "pending" && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleConfirm(booking)}
-                            title="Confirm Booking"
-                          >
-                            <Check className="h-4 w-4 text-green-600" />
-                          </Button>
-                        )}
                         {userRole === "super_admin" && (
                           <Button
                             variant="ghost"
