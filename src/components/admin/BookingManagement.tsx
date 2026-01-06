@@ -56,33 +56,54 @@ export default function BookingManagement() {
   const fetchBookings = async () => {
     setLoading(true);
     
-    const { data, error } = await supabase
+    // Fetch bookings first
+    const { data: bookingsData, error: bookingsError } = await supabase
       .from("bookings")
-      .select(`
-        *,
-        profiles:user_id (
-          first_name,
-          last_name,
-          phone
-        ),
-        events:event_id (
-          title,
-          start_time,
-          venue_address
-        )
-      `)
+      .select("*")
       .order("created_at", { ascending: false });
 
-    if (error) {
+    if (bookingsError) {
+      console.error("Error fetching bookings:", bookingsError);
       toast({
         title: "Error",
         description: "Failed to load bookings",
         variant: "destructive",
       });
-    } else if (data) {
-      setBookings(data as any);
+      setLoading(false);
+      return;
     }
 
+    if (!bookingsData || bookingsData.length === 0) {
+      setBookings([]);
+      setLoading(false);
+      return;
+    }
+
+    // Get unique user IDs and event IDs
+    const userIds = [...new Set(bookingsData.map(b => b.user_id))];
+    const eventIds = [...new Set(bookingsData.map(b => b.event_id))];
+
+    // Fetch profiles and events separately
+    const [profilesRes, eventsRes] = await Promise.all([
+      supabase.from("profiles").select("id, first_name, last_name, phone").in("id", userIds),
+      supabase.from("events").select("id, title, start_time, venue_address").in("id", eventIds)
+    ]);
+
+    const profilesMap = new Map(
+      (profilesRes.data || []).map(p => [p.id, p])
+    );
+    const eventsMap = new Map(
+      (eventsRes.data || []).map(e => [e.id, e])
+    );
+
+    // Combine the data
+    const combinedData = bookingsData.map(booking => ({
+      ...booking,
+      profiles: profilesMap.get(booking.user_id) || null,
+      events: eventsMap.get(booking.event_id) || null,
+    }));
+
+    setBookings(combinedData as any);
     setLoading(false);
   };
 

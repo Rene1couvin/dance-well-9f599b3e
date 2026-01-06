@@ -63,42 +63,65 @@ export default function EnrollmentManagement() {
   const fetchEnrollments = async () => {
     setLoading(true);
     
-    const { data, error } = await supabase
+    // Fetch enrollments first
+    const { data: enrollmentsData, error: enrollmentsError } = await supabase
       .from("class_enrollments")
-      .select(`
-        *,
-        profiles:user_id (
-          first_name,
-          last_name,
-          phone,
-          username
-        ),
-        classes:class_id (
-          title,
-          category,
-          regular_price,
-          private_price,
-          class_type,
-          schedule,
-          location
-        ),
-        class_enrollment_schedule (
-          selected_days
-        )
-      `)
+      .select("*")
       .order("enrolled_at", { ascending: false });
 
-    if (error) {
-      console.error("Error fetching enrollments:", error);
+    if (enrollmentsError) {
+      console.error("Error fetching enrollments:", enrollmentsError);
       toast({
         title: "Error",
         description: "Failed to load class enrollments",
         variant: "destructive",
       });
-    } else if (data) {
-      setEnrollments(data as any);
+      setLoading(false);
+      return;
     }
 
+    if (!enrollmentsData || enrollmentsData.length === 0) {
+      setEnrollments([]);
+      setLoading(false);
+      return;
+    }
+
+    // Get unique user IDs, class IDs, and enrollment IDs
+    const userIds = [...new Set(enrollmentsData.map(e => e.user_id))];
+    const classIds = [...new Set(enrollmentsData.map(e => e.class_id))];
+    const enrollmentIds = enrollmentsData.map(e => e.id);
+
+    // Fetch profiles, classes, and schedules separately
+    const [profilesRes, classesRes, schedulesRes] = await Promise.all([
+      supabase.from("profiles").select("id, first_name, last_name, phone, username").in("id", userIds),
+      supabase.from("classes").select("id, title, category, regular_price, private_price, class_type, schedule, location").in("id", classIds),
+      supabase.from("class_enrollment_schedule").select("enrollment_id, selected_days").in("enrollment_id", enrollmentIds)
+    ]);
+
+    const profilesMap = new Map(
+      (profilesRes.data || []).map(p => [p.id, p])
+    );
+    const classesMap = new Map(
+      (classesRes.data || []).map(c => [c.id, c])
+    );
+    
+    // Group schedules by enrollment_id
+    const schedulesMap = new Map<string, { selected_days: string[] }[]>();
+    (schedulesRes.data || []).forEach(s => {
+      const existing = schedulesMap.get(s.enrollment_id) || [];
+      existing.push({ selected_days: s.selected_days });
+      schedulesMap.set(s.enrollment_id, existing);
+    });
+
+    // Combine the data
+    const combinedData = enrollmentsData.map(enrollment => ({
+      ...enrollment,
+      profiles: profilesMap.get(enrollment.user_id) || null,
+      classes: classesMap.get(enrollment.class_id) || null,
+      class_enrollment_schedule: schedulesMap.get(enrollment.id) || [],
+    }));
+
+    setEnrollments(combinedData as any);
     setLoading(false);
   };
 
