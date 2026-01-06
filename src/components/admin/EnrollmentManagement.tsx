@@ -4,8 +4,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Printer, Trash2, Check } from "lucide-react";
+import { Printer, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 
 interface EnrollmentWithDetails {
@@ -176,26 +177,28 @@ export default function EnrollmentManagement() {
     }
   };
 
-  const handleConfirm = async (enrollment: EnrollmentWithDetails) => {
+  const handleStatusChange = async (enrollment: EnrollmentWithDetails, newStatus: string) => {
     const { error } = await supabase
       .from("class_enrollments")
-      .update({ payment_status: "paid" })
+      .update({ payment_status: newStatus })
       .eq("id", enrollment.id);
 
     if (error) {
       toast({
         title: "Error",
-        description: "Failed to confirm enrollment",
+        description: "Failed to update enrollment status",
         variant: "destructive",
       });
     } else {
       toast({
         title: "Success",
-        description: "Enrollment confirmed successfully",
+        description: `Enrollment status updated to ${newStatus}`,
       });
       
-      // Send confirmation email
-      sendConfirmationEmail(enrollment);
+      // Send confirmation email when status changes to confirmed or paid
+      if (newStatus === "confirmed" || newStatus === "paid") {
+        sendConfirmationEmail(enrollment);
+      }
       
       fetchEnrollments();
     }
@@ -349,23 +352,46 @@ export default function EnrollmentManagement() {
                       <Badge variant="outline">Mobile Money</Badge>
                     </TableCell>
                     <TableCell>
-                      {getStatusBadge(enrollment.payment_status)}
+                      <Select
+                        value={enrollment.payment_status || "pending"}
+                        onValueChange={(value) => handleStatusChange(enrollment, value)}
+                      >
+                        <SelectTrigger className="w-[130px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="pending">
+                            <span className="flex items-center gap-2">
+                              <span className="h-2 w-2 rounded-full bg-yellow-500" />
+                              Pending
+                            </span>
+                          </SelectItem>
+                          <SelectItem value="confirmed">
+                            <span className="flex items-center gap-2">
+                              <span className="h-2 w-2 rounded-full bg-green-500" />
+                              Confirmed
+                            </span>
+                          </SelectItem>
+                          <SelectItem value="paid">
+                            <span className="flex items-center gap-2">
+                              <span className="h-2 w-2 rounded-full bg-green-500" />
+                              Paid
+                            </span>
+                          </SelectItem>
+                          <SelectItem value="canceled">
+                            <span className="flex items-center gap-2">
+                              <span className="h-2 w-2 rounded-full bg-red-500" />
+                              Canceled
+                            </span>
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
                     </TableCell>
                     <TableCell>
-                      {format(new Date(enrollment.enrolled_at), "PPP")}
+                      {new Date(enrollment.enrolled_at).toLocaleDateString()}
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-2">
-                        {enrollment.payment_status === "pending" && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleConfirm(enrollment)}
-                            title="Confirm Enrollment"
-                          >
-                            <Check className="h-4 w-4 text-green-600" />
-                          </Button>
-                        )}
                         {userRole === "super_admin" && (
                           <Button
                             variant="ghost"

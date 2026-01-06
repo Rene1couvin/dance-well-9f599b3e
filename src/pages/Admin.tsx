@@ -15,7 +15,8 @@ import ContactInbox from "@/components/admin/ContactInbox";
 import GalleryUpload from "@/components/admin/GalleryUpload";
 import BookingManagement from "@/components/admin/BookingManagement";
 import EnrollmentManagement from "@/components/admin/EnrollmentManagement";
-import { Users, Calendar, BookOpen, DollarSign } from "lucide-react";
+import ArchivedEvents from "@/components/admin/ArchivedEvents";
+import { Users, Calendar, BookOpen, DollarSign, Archive } from "lucide-react";
 
 const Admin = () => {
   const { user, loading: authLoading } = useAuth();
@@ -145,6 +146,10 @@ const Admin = () => {
             <TabsTrigger value="users">Users</TabsTrigger>
             <TabsTrigger value="classes">Classes</TabsTrigger>
             <TabsTrigger value="events">Events</TabsTrigger>
+            <TabsTrigger value="archived">
+              <Archive className="h-4 w-4 mr-1" />
+              Archived
+            </TabsTrigger>
             <TabsTrigger value="bookings">Event Bookings</TabsTrigger>
             <TabsTrigger value="enrollments">Class Enrollments</TabsTrigger>
             <TabsTrigger value="gallery">Gallery</TabsTrigger>
@@ -183,6 +188,10 @@ const Admin = () => {
 
           <TabsContent value="events">
             <EventManagement />
+          </TabsContent>
+
+          <TabsContent value="archived">
+            <ArchivedEvents />
           </TabsContent>
 
           <TabsContent value="bookings">
