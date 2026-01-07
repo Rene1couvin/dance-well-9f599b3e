@@ -1,15 +1,67 @@
+import { useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Calendar, Users, Music, Award } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Calendar, Users, Music, Award, MapPin, Clock, ArrowRight } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import heroImage from "@/assets/hero-dance.jpg";
+import { format } from "date-fns";
+
+interface Event {
+  id: string;
+  title: string;
+  start_time: string;
+  venue_address: string | null;
+  price: number | null;
+  is_paid: boolean;
+  class_category: string | null;
+}
+
+interface Class {
+  id: string;
+  title: string;
+  category: string;
+  schedule: string | null;
+  location: string | null;
+  regular_price: number | null;
+}
 
 const Index = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const [upcomingEvents, setUpcomingEvents] = useState<Event[]>([]);
+  const [classes, setClasses] = useState<Class[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchPreviewData();
+  }, []);
+
+  const fetchPreviewData = async () => {
+    // Fetch upcoming events (next 3)
+    const { data: eventsData } = await supabase
+      .from("events")
+      .select("id, title, start_time, venue_address, price, is_paid, class_category")
+      .gte("start_time", new Date().toISOString())
+      .eq("status", "upcoming")
+      .order("start_time", { ascending: true })
+      .limit(3);
+
+    // Fetch active classes (first 4)
+    const { data: classesData } = await supabase
+      .from("classes")
+      .select("id, title, category, schedule, location, regular_price")
+      .eq("is_active", true)
+      .limit(4);
+
+    setUpcomingEvents(eventsData || []);
+    setClasses(classesData || []);
+    setLoading(false);
+  };
 
   const handleGetStarted = () => {
     if (user) {
@@ -60,8 +112,112 @@ const Index = () => {
           </div>
         </section>
 
+        {/* Upcoming Events Preview Section */}
+        {upcomingEvents.length > 0 && (
+          <section className="py-16 md:py-24 bg-muted/30">
+            <div className="container">
+              <div className="flex items-center justify-between mb-8">
+                <div>
+                  <h2 className="text-3xl font-bold mb-2 md:text-4xl">Upcoming Events</h2>
+                  <p className="text-muted-foreground">Don't miss out on our exciting dance events</p>
+                </div>
+                <Button variant="outline" asChild>
+                  <Link to="/events" className="flex items-center gap-2">
+                    View All <ArrowRight className="h-4 w-4" />
+                  </Link>
+                </Button>
+              </div>
+              
+              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                {upcomingEvents.map((event) => (
+                  <Card key={event.id} className="border-2 hover:shadow-elegant transition-all duration-300">
+                    <CardHeader>
+                      <div className="flex items-center justify-between mb-2">
+                        <Badge variant="outline" className="capitalize">
+                          {event.class_category || "Dance"}
+                        </Badge>
+                        <Badge className={event.is_paid ? "bg-primary" : "bg-green-500"}>
+                          {event.is_paid ? `${event.price} RWF` : "Free"}
+                        </Badge>
+                      </div>
+                      <CardTitle className="line-clamp-2">{event.title}</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Calendar className="h-4 w-4" />
+                        {format(new Date(event.start_time), "PPP")}
+                      </div>
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Clock className="h-4 w-4" />
+                        {format(new Date(event.start_time), "h:mm a")}
+                      </div>
+                      {event.venue_address && (
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <MapPin className="h-4 w-4" />
+                          {event.venue_address}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* Classes Preview Section */}
+        {classes.length > 0 && (
+          <section className="py-16 md:py-24">
+            <div className="container">
+              <div className="flex items-center justify-between mb-8">
+                <div>
+                  <h2 className="text-3xl font-bold mb-2 md:text-4xl">Our Classes</h2>
+                  <p className="text-muted-foreground">Learn from expert instructors in various dance styles</p>
+                </div>
+                <Button variant="outline" asChild>
+                  <Link to="/classes" className="flex items-center gap-2">
+                    View All <ArrowRight className="h-4 w-4" />
+                  </Link>
+                </Button>
+              </div>
+              
+              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+                {classes.map((cls) => (
+                  <Card key={cls.id} className="border-2 hover:shadow-elegant transition-all duration-300">
+                    <CardHeader>
+                      <Badge variant="outline" className="w-fit capitalize mb-2">
+                        {cls.category}
+                      </Badge>
+                      <CardTitle className="text-lg line-clamp-2">{cls.title}</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      {cls.schedule && (
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <Clock className="h-4 w-4" />
+                          {cls.schedule}
+                        </div>
+                      )}
+                      {cls.location && (
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <MapPin className="h-4 w-4" />
+                          {cls.location}
+                        </div>
+                      )}
+                      <div className="pt-2">
+                        <span className="text-primary font-semibold">
+                          {cls.regular_price ? `${cls.regular_price} RWF` : "Contact for price"}
+                        </span>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          </section>
+        )}
+
         {/* Features Section */}
-        <section className="py-16 md:py-24 bg-muted/30">
+        <section className={`py-16 md:py-24 ${upcomingEvents.length === 0 && classes.length === 0 ? 'bg-muted/30' : ''}`}>
           <div className="container">
             <div className="text-center mb-12">
               <h2 className="text-3xl font-bold mb-4 md:text-4xl">Why Dance With Us?</h2>
@@ -118,6 +274,26 @@ const Index = () => {
                   </CardDescription>
                 </CardHeader>
               </Card>
+            </div>
+          </div>
+        </section>
+
+        {/* Calendar Preview */}
+        <section className="py-16 md:py-24 bg-muted/30">
+          <div className="container">
+            <div className="text-center mb-8">
+              <h2 className="text-3xl font-bold mb-4 md:text-4xl">View Our Calendar</h2>
+              <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
+                Check out our full schedule of classes and events
+              </p>
+            </div>
+            <div className="flex justify-center">
+              <Button size="lg" asChild>
+                <Link to="/calendar" className="flex items-center gap-2">
+                  <Calendar className="h-5 w-5" />
+                  Open Calendar
+                </Link>
+              </Button>
             </div>
           </div>
         </section>

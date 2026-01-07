@@ -4,9 +4,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Printer, Trash2 } from "lucide-react";
+import { Printer, Trash2, Download, Search } from "lucide-react";
 import { format } from "date-fns";
 
 interface EnrollmentWithDetails {
@@ -37,14 +38,50 @@ interface EnrollmentWithDetails {
 
 export default function EnrollmentManagement() {
   const [enrollments, setEnrollments] = useState<EnrollmentWithDetails[]>([]);
+  const [filteredEnrollments, setFilteredEnrollments] = useState<EnrollmentWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
   const [userRole, setUserRole] = useState<string>("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const { toast } = useToast();
 
   useEffect(() => {
     fetchUserRole();
     fetchEnrollments();
   }, []);
+
+  useEffect(() => {
+    filterEnrollments();
+  }, [enrollments, searchQuery, statusFilter, categoryFilter]);
+
+  const filterEnrollments = () => {
+    let filtered = [...enrollments];
+    
+    // Search filter
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(enrollment => 
+        enrollment.profiles?.first_name?.toLowerCase().includes(query) ||
+        enrollment.profiles?.last_name?.toLowerCase().includes(query) ||
+        enrollment.profiles?.phone?.toLowerCase().includes(query) ||
+        enrollment.profiles?.username?.toLowerCase().includes(query) ||
+        enrollment.classes?.title?.toLowerCase().includes(query)
+      );
+    }
+    
+    // Status filter
+    if (statusFilter !== "all") {
+      filtered = filtered.filter(enrollment => (enrollment.payment_status || "pending") === statusFilter);
+    }
+    
+    // Category filter
+    if (categoryFilter !== "all") {
+      filtered = filtered.filter(enrollment => enrollment.classes?.category === categoryFilter);
+    }
+    
+    setFilteredEnrollments(filtered);
+  };
 
   const fetchUserRole = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -64,7 +101,6 @@ export default function EnrollmentManagement() {
   const fetchEnrollments = async () => {
     setLoading(true);
     
-    // Fetch enrollments first
     const { data: enrollmentsData, error: enrollmentsError } = await supabase
       .from("class_enrollments")
       .select("*")
@@ -87,26 +123,19 @@ export default function EnrollmentManagement() {
       return;
     }
 
-    // Get unique user IDs, class IDs, and enrollment IDs
     const userIds = [...new Set(enrollmentsData.map(e => e.user_id))];
     const classIds = [...new Set(enrollmentsData.map(e => e.class_id))];
     const enrollmentIds = enrollmentsData.map(e => e.id);
 
-    // Fetch profiles, classes, and schedules separately
     const [profilesRes, classesRes, schedulesRes] = await Promise.all([
       supabase.from("profiles").select("id, first_name, last_name, phone, username").in("id", userIds),
       supabase.from("classes").select("id, title, category, regular_price, private_price, class_type, schedule, location").in("id", classIds),
       supabase.from("class_enrollment_schedule").select("enrollment_id, selected_days").in("enrollment_id", enrollmentIds)
     ]);
 
-    const profilesMap = new Map(
-      (profilesRes.data || []).map(p => [p.id, p])
-    );
-    const classesMap = new Map(
-      (classesRes.data || []).map(c => [c.id, c])
-    );
+    const profilesMap = new Map((profilesRes.data || []).map(p => [p.id, p]));
+    const classesMap = new Map((classesRes.data || []).map(c => [c.id, c]));
     
-    // Group schedules by enrollment_id
     const schedulesMap = new Map<string, { selected_days: string[] }[]>();
     (schedulesRes.data || []).forEach(s => {
       const existing = schedulesMap.get(s.enrollment_id) || [];
@@ -114,7 +143,6 @@ export default function EnrollmentManagement() {
       schedulesMap.set(s.enrollment_id, existing);
     });
 
-    // Combine the data
     const combinedData = enrollmentsData.map(enrollment => ({
       ...enrollment,
       profiles: profilesMap.get(enrollment.user_id) || null,
@@ -150,7 +178,7 @@ export default function EnrollmentManagement() {
     return classData.regular_price || 0;
   };
 
-  const sendConfirmationEmail = async (enrollment: EnrollmentWithDetails) => {
+  const sendStatusChangeEmail = async (enrollment: EnrollmentWithDetails, newStatus: string) => {
     try {
       const classType = getClassType(enrollment);
       const schedule = getSchedule(enrollment);
@@ -161,16 +189,17 @@ export default function EnrollmentManagement() {
           type: "enrollment",
           userId: enrollment.user_id,
           itemTitle: enrollment.classes?.title || "Class",
-          itemDetails: `Type: ${classType} | Schedule: ${schedule}${enrollment.classes?.location ? ` | Location: ${enrollment.classes.location}` : ""}`,
+          itemDetails: `Type: ${classType} | Schedule: ${schedule}${enrollment.classes?.location ? ` | Location: ${enrollment.classes.location}` : ""} | Status: ${newStatus.toUpperCase()}`,
           amount: price,
           currency: "RWF",
+          status: newStatus,
         },
       });
 
       if (error) {
         console.error("Error sending email:", error);
       } else {
-        console.log("Confirmation email sent successfully");
+        console.log("Status change email sent successfully");
       }
     } catch (error) {
       console.error("Error invoking email function:", error);
@@ -195,11 +224,8 @@ export default function EnrollmentManagement() {
         description: `Enrollment status updated to ${newStatus}`,
       });
       
-      // Send confirmation email when status changes to confirmed or paid
-      if (newStatus === "confirmed" || newStatus === "paid") {
-        sendConfirmationEmail(enrollment);
-      }
-      
+      // Send email for any status change
+      sendStatusChangeEmail(enrollment, newStatus);
       fetchEnrollments();
     }
   };
@@ -234,6 +260,34 @@ export default function EnrollmentManagement() {
       });
       fetchEnrollments();
     }
+  };
+
+  const exportToCSV = () => {
+    const headers = ["Student Name", "Email", "Phone", "Class", "Category", "Type", "Schedule", "Price", "Status", "Enrolled On"];
+    const rows = filteredEnrollments.map(enrollment => [
+      `${enrollment.profiles?.first_name || ""} ${enrollment.profiles?.last_name || ""}`.trim(),
+      enrollment.profiles?.username || "N/A",
+      enrollment.profiles?.phone || "N/A",
+      enrollment.classes?.title || "N/A",
+      enrollment.classes?.category || "N/A",
+      getClassType(enrollment),
+      getSchedule(enrollment),
+      `${getPrice(enrollment)} RWF`,
+      enrollment.payment_status || "pending",
+      format(new Date(enrollment.enrolled_at), "PPP")
+    ]);
+
+    const csvContent = [headers, ...rows].map(row => row.map(cell => `"${cell}"`).join(",")).join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `enrollments-${format(new Date(), "yyyy-MM-dd")}.csv`;
+    link.click();
+    
+    toast({
+      title: "Export Successful",
+      description: "Enrollments exported to CSV",
+    });
   };
 
   const handlePrint = () => {
@@ -271,17 +325,8 @@ export default function EnrollmentManagement() {
     printWindow.print();
   };
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "paid":
-      case "confirmed":
-        return <Badge className="bg-green-500 hover:bg-green-600">Confirmed</Badge>;
-      case "pending":
-        return <Badge className="bg-yellow-500 hover:bg-yellow-600 text-black">Pending</Badge>;
-      default:
-        return <Badge variant="secondary">{status || "pending"}</Badge>;
-    }
-  };
+  // Get unique categories for filter
+  const categories = [...new Set(enrollments.map(e => e.classes?.category).filter(Boolean))];
 
   if (loading) {
     return <div>Loading enrollments...</div>;
@@ -290,15 +335,59 @@ export default function EnrollmentManagement() {
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-4">
           <div>
             <CardTitle>Class Enrollment Management</CardTitle>
             <CardDescription>View and manage class enrollments</CardDescription>
           </div>
-          <Button onClick={handlePrint} variant="outline" size="sm">
-            <Printer className="h-4 w-4 mr-2" />
-            Print
-          </Button>
+          <div className="flex gap-2">
+            <Button onClick={exportToCSV} variant="outline" size="sm">
+              <Download className="h-4 w-4 mr-2" />
+              Export CSV
+            </Button>
+            <Button onClick={handlePrint} variant="outline" size="sm">
+              <Printer className="h-4 w-4 mr-2" />
+              Print
+            </Button>
+          </div>
+        </div>
+        
+        {/* Search and Filters */}
+        <div className="flex gap-4 mt-4 flex-wrap">
+          <div className="relative flex-1 min-w-[200px]">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search by name, email, phone, or class..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-[150px]">
+              <SelectValue placeholder="Filter by status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Status</SelectItem>
+              <SelectItem value="pending">Pending</SelectItem>
+              <SelectItem value="confirmed">Confirmed</SelectItem>
+              <SelectItem value="paid">Paid</SelectItem>
+              <SelectItem value="canceled">Canceled</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+            <SelectTrigger className="w-[150px]">
+              <SelectValue placeholder="Filter by category" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Categories</SelectItem>
+              {categories.map(cat => (
+                <SelectItem key={cat} value={cat} className="capitalize">
+                  {cat}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </CardHeader>
       <CardContent>
@@ -321,14 +410,14 @@ export default function EnrollmentManagement() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {enrollments.length === 0 ? (
+              {filteredEnrollments.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={12} className="text-center">
                     No enrollments found
                   </TableCell>
                 </TableRow>
               ) : (
-                enrollments.map((enrollment) => (
+                filteredEnrollments.map((enrollment) => (
                   <TableRow key={enrollment.id}>
                     <TableCell>
                       {enrollment.profiles?.first_name} {enrollment.profiles?.last_name}
@@ -337,7 +426,7 @@ export default function EnrollmentManagement() {
                     <TableCell>{enrollment.profiles?.phone || "N/A"}</TableCell>
                     <TableCell>{enrollment.classes?.title}</TableCell>
                     <TableCell>
-                      <Badge variant="outline">
+                      <Badge variant="outline" className="capitalize">
                         {enrollment.classes?.category}
                       </Badge>
                     </TableCell>

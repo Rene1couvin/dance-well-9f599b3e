@@ -4,8 +4,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Printer, RotateCcw, Trash2 } from "lucide-react";
+import { Printer, RotateCcw, Trash2, Download, Search } from "lucide-react";
 import { format } from "date-fns";
 
 interface ArchivedEvent {
@@ -25,14 +27,42 @@ interface ArchivedEvent {
 
 export default function ArchivedEvents() {
   const [events, setEvents] = useState<ArchivedEvent[]>([]);
+  const [filteredEvents, setFilteredEvents] = useState<ArchivedEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [userRole, setUserRole] = useState<string>("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const { toast } = useToast();
 
   useEffect(() => {
     fetchUserRole();
     fetchArchivedEvents();
   }, []);
+
+  useEffect(() => {
+    filterEvents();
+  }, [events, searchQuery, categoryFilter]);
+
+  const filterEvents = () => {
+    let filtered = [...events];
+    
+    // Search filter
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(event => 
+        event.title?.toLowerCase().includes(query) ||
+        event.venue_address?.toLowerCase().includes(query) ||
+        event.description?.toLowerCase().includes(query)
+      );
+    }
+    
+    // Category filter
+    if (categoryFilter !== "all") {
+      filtered = filtered.filter(event => event.class_category === categoryFilter);
+    }
+    
+    setFilteredEvents(filtered);
+  };
 
   const fetchUserRole = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -52,7 +82,6 @@ export default function ArchivedEvents() {
   const fetchArchivedEvents = async () => {
     setLoading(true);
     
-    // Fetch events that have ended (start_time is in the past)
     const { data: eventsData, error } = await supabase
       .from("events")
       .select("*")
@@ -76,21 +105,18 @@ export default function ArchivedEvents() {
       return;
     }
 
-    // Fetch booking counts for each event
     const eventIds = eventsData.map(e => e.id);
     const { data: bookingsData } = await supabase
       .from("bookings")
       .select("event_id")
       .in("event_id", eventIds);
 
-    // Count bookings per event
     const bookingsCountMap = new Map<string, number>();
     (bookingsData || []).forEach(b => {
       const count = bookingsCountMap.get(b.event_id) || 0;
       bookingsCountMap.set(b.event_id, count + 1);
     });
 
-    // Combine data
     const enrichedEvents = eventsData.map(event => ({
       ...event,
       bookings_count: bookingsCountMap.get(event.id) || 0,
@@ -153,6 +179,31 @@ export default function ArchivedEvents() {
     }
   };
 
+  const exportToCSV = () => {
+    const headers = ["Event Title", "Date", "Time", "Location", "Category", "Price", "Bookings"];
+    const rows = filteredEvents.map(event => [
+      event.title,
+      format(new Date(event.start_time), "PPP"),
+      format(new Date(event.start_time), "h:mm a"),
+      event.venue_address || "Online",
+      event.class_category || "N/A",
+      event.is_paid ? `${event.price} RWF` : "Free",
+      event.bookings_count?.toString() || "0"
+    ]);
+
+    const csvContent = [headers, ...rows].map(row => row.map(cell => `"${cell}"`).join(",")).join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `archived-events-${format(new Date(), "yyyy-MM-dd")}.csv`;
+    link.click();
+    
+    toast({
+      title: "Export Successful",
+      description: "Archived events exported to CSV",
+    });
+  };
+
   const handlePrint = () => {
     const printContent = document.getElementById("archived-events-table");
     if (!printContent) return;
@@ -188,6 +239,9 @@ export default function ArchivedEvents() {
     printWindow.print();
   };
 
+  // Get unique categories for filter
+  const categories = [...new Set(events.map(e => e.class_category).filter(Boolean))];
+
   if (loading) {
     return <div>Loading archived events...</div>;
   }
@@ -195,15 +249,47 @@ export default function ArchivedEvents() {
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-4">
           <div>
             <CardTitle>Archived Events</CardTitle>
             <CardDescription>Past events that are no longer visible to users</CardDescription>
           </div>
-          <Button onClick={handlePrint} variant="outline" size="sm">
-            <Printer className="h-4 w-4 mr-2" />
-            Print
-          </Button>
+          <div className="flex gap-2">
+            <Button onClick={exportToCSV} variant="outline" size="sm">
+              <Download className="h-4 w-4 mr-2" />
+              Export CSV
+            </Button>
+            <Button onClick={handlePrint} variant="outline" size="sm">
+              <Printer className="h-4 w-4 mr-2" />
+              Print
+            </Button>
+          </div>
+        </div>
+        
+        {/* Search and Filters */}
+        <div className="flex gap-4 mt-4 flex-wrap">
+          <div className="relative flex-1 min-w-[200px]">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search by title or location..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+          <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+            <SelectTrigger className="w-[150px]">
+              <SelectValue placeholder="Filter by category" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Categories</SelectItem>
+              {categories.map(cat => (
+                <SelectItem key={cat} value={cat} className="capitalize">
+                  {cat}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </CardHeader>
       <CardContent>
@@ -222,14 +308,14 @@ export default function ArchivedEvents() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {events.length === 0 ? (
+              {filteredEvents.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={8} className="text-center">
                     No archived events found
                   </TableCell>
                 </TableRow>
               ) : (
-                events.map((event) => (
+                filteredEvents.map((event) => (
                   <TableRow key={event.id}>
                     <TableCell className="font-medium">{event.title}</TableCell>
                     <TableCell>
@@ -240,7 +326,7 @@ export default function ArchivedEvents() {
                     </TableCell>
                     <TableCell>{event.venue_address || "Online"}</TableCell>
                     <TableCell>
-                      <Badge variant="outline">{event.class_category}</Badge>
+                      <Badge variant="outline" className="capitalize">{event.class_category}</Badge>
                     </TableCell>
                     <TableCell>
                       {event.is_paid ? `${event.price} RWF` : "Free"}
