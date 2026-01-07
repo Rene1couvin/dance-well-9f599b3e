@@ -4,9 +4,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Printer, Trash2 } from "lucide-react";
+import { Printer, Trash2, Download, Search } from "lucide-react";
 import { format } from "date-fns";
 
 interface BookingWithDetails {
@@ -30,14 +31,43 @@ interface BookingWithDetails {
 
 export default function BookingManagement() {
   const [bookings, setBookings] = useState<BookingWithDetails[]>([]);
+  const [filteredBookings, setFilteredBookings] = useState<BookingWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
   const [userRole, setUserRole] = useState<string>("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
   const { toast } = useToast();
 
   useEffect(() => {
     fetchUserRole();
     fetchBookings();
   }, []);
+
+  useEffect(() => {
+    filterBookings();
+  }, [bookings, searchQuery, statusFilter]);
+
+  const filterBookings = () => {
+    let filtered = [...bookings];
+    
+    // Search filter
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(booking => 
+        booking.profiles?.first_name?.toLowerCase().includes(query) ||
+        booking.profiles?.last_name?.toLowerCase().includes(query) ||
+        booking.profiles?.phone?.toLowerCase().includes(query) ||
+        booking.events?.title?.toLowerCase().includes(query)
+      );
+    }
+    
+    // Status filter
+    if (statusFilter !== "all") {
+      filtered = filtered.filter(booking => booking.status === statusFilter);
+    }
+    
+    setFilteredBookings(filtered);
+  };
 
   const fetchUserRole = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -57,7 +87,6 @@ export default function BookingManagement() {
   const fetchBookings = async () => {
     setLoading(true);
     
-    // Fetch bookings first
     const { data: bookingsData, error: bookingsError } = await supabase
       .from("bookings")
       .select("*")
@@ -80,24 +109,17 @@ export default function BookingManagement() {
       return;
     }
 
-    // Get unique user IDs and event IDs
     const userIds = [...new Set(bookingsData.map(b => b.user_id))];
     const eventIds = [...new Set(bookingsData.map(b => b.event_id))];
 
-    // Fetch profiles and events separately
     const [profilesRes, eventsRes] = await Promise.all([
       supabase.from("profiles").select("id, first_name, last_name, phone").in("id", userIds),
       supabase.from("events").select("id, title, start_time, venue_address").in("id", eventIds)
     ]);
 
-    const profilesMap = new Map(
-      (profilesRes.data || []).map(p => [p.id, p])
-    );
-    const eventsMap = new Map(
-      (eventsRes.data || []).map(e => [e.id, e])
-    );
+    const profilesMap = new Map((profilesRes.data || []).map(p => [p.id, p]));
+    const eventsMap = new Map((eventsRes.data || []).map(e => [e.id, e]));
 
-    // Combine the data
     const combinedData = bookingsData.map(booking => ({
       ...booking,
       profiles: profilesMap.get(booking.user_id) || null,
@@ -108,7 +130,7 @@ export default function BookingManagement() {
     setLoading(false);
   };
 
-  const sendConfirmationEmail = async (booking: BookingWithDetails) => {
+  const sendStatusChangeEmail = async (booking: BookingWithDetails, newStatus: string) => {
     try {
       const { error } = await supabase.functions.invoke("send-confirmation-email", {
         body: {
@@ -116,17 +138,18 @@ export default function BookingManagement() {
           userId: booking.user_id,
           itemTitle: booking.events?.title || "Event",
           itemDetails: booking.events?.start_time 
-            ? `Date: ${format(new Date(booking.events.start_time), "PPP 'at' h:mm a")}${booking.events?.venue_address ? ` | Location: ${booking.events.venue_address}` : ""}`
-            : undefined,
+            ? `Date: ${format(new Date(booking.events.start_time), "PPP 'at' h:mm a")}${booking.events?.venue_address ? ` | Location: ${booking.events.venue_address}` : ""} | Status: ${newStatus.toUpperCase()}`
+            : `Status: ${newStatus.toUpperCase()}`,
           amount: booking.amount,
           currency: "RWF",
+          status: newStatus,
         },
       });
 
       if (error) {
         console.error("Error sending email:", error);
       } else {
-        console.log("Confirmation email sent successfully");
+        console.log("Status change email sent successfully");
       }
     } catch (error) {
       console.error("Error invoking email function:", error);
@@ -151,11 +174,8 @@ export default function BookingManagement() {
         description: `Booking status updated to ${newStatus}`,
       });
       
-      // Send confirmation email when status changes to confirmed or paid
-      if (newStatus === "confirmed" || newStatus === "paid") {
-        sendConfirmationEmail(booking);
-      }
-      
+      // Send email for any status change
+      sendStatusChangeEmail(booking, newStatus);
       fetchBookings();
     }
   };
@@ -190,6 +210,31 @@ export default function BookingManagement() {
       });
       fetchBookings();
     }
+  };
+
+  const exportToCSV = () => {
+    const headers = ["Full Name", "Phone", "Event", "Event Date", "Amount", "Status", "Booked On"];
+    const rows = filteredBookings.map(booking => [
+      `${booking.profiles?.first_name || ""} ${booking.profiles?.last_name || ""}`.trim(),
+      booking.profiles?.phone || "N/A",
+      booking.events?.title || "N/A",
+      booking.events?.start_time ? format(new Date(booking.events.start_time), "PPP") : "N/A",
+      `${booking.amount} RWF`,
+      booking.status,
+      format(new Date(booking.created_at), "PPP")
+    ]);
+
+    const csvContent = [headers, ...rows].map(row => row.map(cell => `"${cell}"`).join(",")).join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `bookings-${format(new Date(), "yyyy-MM-dd")}.csv`;
+    link.click();
+    
+    toast({
+      title: "Export Successful",
+      description: "Bookings exported to CSV",
+    });
   };
 
   const handlePrint = () => {
@@ -227,20 +272,6 @@ export default function BookingManagement() {
     printWindow.print();
   };
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "confirmed":
-      case "paid":
-        return <Badge className="bg-green-500 hover:bg-green-600">Confirmed</Badge>;
-      case "pending":
-        return <Badge className="bg-yellow-500 hover:bg-yellow-600 text-black">Pending</Badge>;
-      case "canceled":
-        return <Badge variant="destructive">Canceled</Badge>;
-      default:
-        return <Badge variant="secondary">{status}</Badge>;
-    }
-  };
-
   if (loading) {
     return <div>Loading bookings...</div>;
   }
@@ -248,15 +279,47 @@ export default function BookingManagement() {
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-4">
           <div>
             <CardTitle>Booking Management</CardTitle>
             <CardDescription>View and manage event bookings</CardDescription>
           </div>
-          <Button onClick={handlePrint} variant="outline" size="sm">
-            <Printer className="h-4 w-4 mr-2" />
-            Print
-          </Button>
+          <div className="flex gap-2">
+            <Button onClick={exportToCSV} variant="outline" size="sm">
+              <Download className="h-4 w-4 mr-2" />
+              Export CSV
+            </Button>
+            <Button onClick={handlePrint} variant="outline" size="sm">
+              <Printer className="h-4 w-4 mr-2" />
+              Print
+            </Button>
+          </div>
+        </div>
+        
+        {/* Search and Filter */}
+        <div className="flex gap-4 mt-4 flex-wrap">
+          <div className="relative flex-1 min-w-[200px]">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search by name, phone, or event..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-[150px]">
+              <SelectValue placeholder="Filter by status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Status</SelectItem>
+              <SelectItem value="pending">Pending</SelectItem>
+              <SelectItem value="confirmed">Confirmed</SelectItem>
+              <SelectItem value="paid">Paid</SelectItem>
+              <SelectItem value="canceled">Canceled</SelectItem>
+              <SelectItem value="refunded">Refunded</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </CardHeader>
       <CardContent>
@@ -276,14 +339,14 @@ export default function BookingManagement() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {bookings.length === 0 ? (
+              {filteredBookings.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={9} className="text-center">
                     No bookings found
                   </TableCell>
                 </TableRow>
               ) : (
-                bookings.map((booking) => (
+                filteredBookings.map((booking) => (
                   <TableRow key={booking.id}>
                     <TableCell>
                       {booking.profiles?.first_name} {booking.profiles?.last_name}

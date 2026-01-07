@@ -15,6 +15,7 @@ interface ConfirmationEmailRequest {
   itemDetails?: string;
   amount?: number;
   currency?: string;
+  status?: string;
 }
 
 const handler = async (req: Request): Promise<Response> => {
@@ -30,9 +31,9 @@ const handler = async (req: Request): Promise<Response> => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { type, userId, itemTitle, itemDetails, amount, currency }: ConfirmationEmailRequest = await req.json();
+    const { type, userId, itemTitle, itemDetails, amount, currency, status }: ConfirmationEmailRequest = await req.json();
 
-    console.log(`Sending ${type} confirmation email to user ${userId}`);
+    console.log(`Sending ${type} ${status || 'confirmation'} email to user ${userId}`);
 
     // Fetch user profile to get email
     const { data: profile, error: profileError } = await supabase
@@ -58,9 +59,10 @@ const handler = async (req: Request): Promise<Response> => {
     const userEmail = user.email;
 
     const isBooking = type === "booking";
+    const statusText = status ? status.charAt(0).toUpperCase() + status.slice(1) : "Confirmed";
     const subject = isBooking 
-      ? `Your Event Booking is Confirmed - ${itemTitle}`
-      : `Your Class Enrollment is Confirmed - ${itemTitle}`;
+      ? `Your Event Booking Status: ${statusText} - ${itemTitle}`
+      : `Your Class Enrollment Status: ${statusText} - ${itemTitle}`;
 
     const html = `
       <!DOCTYPE html>
@@ -87,7 +89,7 @@ const handler = async (req: Request): Promise<Response> => {
                   <tr>
                     <td style="padding: 40px 30px;">
                       <h2 style="color: #333; margin: 0 0 20px 0; font-size: 24px;">
-                        ${isBooking ? "🎉 Booking Confirmed!" : "✅ Enrollment Confirmed!"}
+                        ${status === "canceled" ? "❌" : status === "refunded" ? "💰" : "🎉"} ${isBooking ? "Booking" : "Enrollment"} ${statusText}!
                       </h2>
                       
                       <p style="color: #666; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
@@ -95,7 +97,14 @@ const handler = async (req: Request): Promise<Response> => {
                       </p>
                       
                       <p style="color: #666; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
-                        Great news! Your ${isBooking ? "event booking" : "class enrollment"} has been confirmed.
+                        ${status === "canceled" 
+                          ? `Your ${isBooking ? "event booking" : "class enrollment"} has been canceled.`
+                          : status === "refunded"
+                          ? `Your ${isBooking ? "event booking" : "class enrollment"} has been refunded.`
+                          : status === "pending"
+                          ? `Your ${isBooking ? "event booking" : "class enrollment"} is pending confirmation.`
+                          : `Great news! Your ${isBooking ? "event booking" : "class enrollment"} has been ${statusText.toLowerCase()}.`
+                        }
                       </p>
                       
                       <!-- Details Box -->
@@ -106,9 +115,14 @@ const handler = async (req: Request): Promise<Response> => {
                       </div>
                       
                       <p style="color: #666; font-size: 16px; line-height: 1.6; margin: 20px 0;">
-                        ${isBooking 
-                          ? "We look forward to seeing you at the event. Make sure to arrive on time!"
-                          : "Get ready to dance! We're excited to have you in class."}
+                        ${status === "canceled" || status === "refunded"
+                          ? "If you have any questions, please don't hesitate to contact us."
+                          : status === "pending"
+                          ? "We will notify you once your payment is confirmed."
+                          : isBooking 
+                            ? "We look forward to seeing you at the event. Make sure to arrive on time!"
+                            : "Get ready to dance! We're excited to have you in class."
+                        }
                       </p>
                       
                       <p style="color: #666; font-size: 16px; line-height: 1.6; margin: 20px 0 0 0;">
