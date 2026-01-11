@@ -601,6 +601,16 @@ export type Database = {
         }
         Returns: boolean
       }
+      log_activity: {
+        Args: {
+          p_action: string
+          p_actor_id: string
+          p_details?: Json
+          p_entity_id?: string
+          p_entity_type: string
+        }
+        Returns: undefined
+      }
       make_user_admin: { Args: { user_email: string }; Returns: undefined }
     }
     Enums: {
