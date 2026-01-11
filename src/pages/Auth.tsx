@@ -6,23 +6,22 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useEffect } from "react";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { supabase } from "@/integrations/supabase/client";
+import { usePostAuthRedirect } from "@/hooks/useAuthRedirect";
 
 const Auth = () => {
   const { signUp, signIn, user } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    if (user) {
-      navigate("/");
-    }
-  }, [user, navigate]);
+  
+  // Handle post-auth redirect with preserved intent
+  usePostAuthRedirect();
 
   const [signUpData, setSignUpData] = useState({
     email: "",

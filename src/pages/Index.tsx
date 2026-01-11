@@ -10,29 +10,40 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import heroImage from "@/assets/hero-dance.jpg";
 import { format } from "date-fns";
+import { useAuthRedirect, RedirectIntent } from "@/hooks/useAuthRedirect";
 
 interface Event {
   id: string;
   title: string;
+  description: string | null;
   start_time: string;
+  end_time: string | null;
   venue_address: string | null;
   price: number | null;
   is_paid: boolean;
   class_category: string | null;
+  capacity: number;
+  currency: string | null;
 }
 
 interface Class {
   id: string;
   title: string;
+  description: string | null;
   category: string;
   schedule: string | null;
   location: string | null;
   regular_price: number | null;
+  private_price: number | null;
+  currency: string | null;
+  class_type: string | null;
+  profiles?: { first_name: string; last_name: string } | null;
 }
 
 const Index = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { redirectToAuth } = useAuthRedirect();
   const [upcomingEvents, setUpcomingEvents] = useState<Event[]>([]);
   const [classes, setClasses] = useState<Class[]>([]);
   const [loading, setLoading] = useState(true);
@@ -42,25 +53,47 @@ const Index = () => {
   }, []);
 
   const fetchPreviewData = async () => {
-    // Fetch upcoming events (next 3)
+    // Fetch upcoming events with full details (next 3)
     const { data: eventsData } = await supabase
       .from("events")
-      .select("id, title, start_time, venue_address, price, is_paid, class_category")
+      .select("id, title, description, start_time, end_time, venue_address, price, is_paid, class_category, capacity, currency")
       .gte("start_time", new Date().toISOString())
       .eq("status", "upcoming")
       .order("start_time", { ascending: true })
       .limit(3);
 
-    // Fetch active classes (first 4)
+    // Fetch active classes with full details (first 4)
     const { data: classesData } = await supabase
       .from("classes")
-      .select("id, title, category, schedule, location, regular_price")
+      .select(`
+        id, title, description, category, schedule, location, 
+        regular_price, private_price, currency, class_type,
+        profiles:teacher_id(first_name, last_name)
+      `)
       .eq("is_active", true)
       .limit(4);
 
     setUpcomingEvents(eventsData || []);
     setClasses(classesData || []);
     setLoading(false);
+  };
+
+  const handleEnrollClick = (classId: string) => {
+    if (user) {
+      navigate(`/classes?intent=${btoa(JSON.stringify({ action: "enroll", id: classId }))}`);
+    } else {
+      const intent: RedirectIntent = { action: "enroll", id: classId };
+      redirectToAuth(intent, "/classes");
+    }
+  };
+
+  const handleBookClick = (eventId: string) => {
+    if (user) {
+      navigate(`/events?intent=${btoa(JSON.stringify({ action: "book", id: eventId }))}`);
+    } else {
+      const intent: RedirectIntent = { action: "book", id: eventId };
+      redirectToAuth(intent, "/events");
+    }
   };
 
   const handleGetStarted = () => {
@@ -130,19 +163,22 @@ const Index = () => {
               
               <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                 {upcomingEvents.map((event) => (
-                  <Card key={event.id} className="border-2 hover:shadow-elegant transition-all duration-300">
+                  <Card key={event.id} className="border-2 hover:shadow-elegant transition-all duration-300 flex flex-col">
                     <CardHeader>
                       <div className="flex items-center justify-between mb-2">
                         <Badge variant="outline" className="capitalize">
                           {event.class_category || "Dance"}
                         </Badge>
                         <Badge className={event.is_paid ? "bg-primary" : "bg-green-500"}>
-                          {event.is_paid ? `${event.price} RWF` : "Free"}
+                          {event.is_paid ? `${event.price} ${event.currency || 'RWF'}` : "Free"}
                         </Badge>
                       </div>
                       <CardTitle className="line-clamp-2">{event.title}</CardTitle>
+                      {event.description && (
+                        <CardDescription className="line-clamp-2">{event.description}</CardDescription>
+                      )}
                     </CardHeader>
-                    <CardContent className="space-y-2">
+                    <CardContent className="space-y-2 flex-1 flex flex-col">
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         <Calendar className="h-4 w-4" />
                         {format(new Date(event.start_time), "PPP")}
@@ -150,6 +186,7 @@ const Index = () => {
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         <Clock className="h-4 w-4" />
                         {format(new Date(event.start_time), "h:mm a")}
+                        {event.end_time && ` - ${format(new Date(event.end_time), "h:mm a")}`}
                       </div>
                       {event.venue_address && (
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -157,6 +194,15 @@ const Index = () => {
                           {event.venue_address}
                         </div>
                       )}
+                      <div className="mt-auto pt-4">
+                        <Button 
+                          onClick={() => handleBookClick(event.id)} 
+                          className="w-full"
+                          size="sm"
+                        >
+                          {user ? "Book Now" : "Sign in to Book"}
+                        </Button>
+                      </div>
                     </CardContent>
                   </Card>
                 ))}
@@ -183,14 +229,30 @@ const Index = () => {
               
               <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
                 {classes.map((cls) => (
-                  <Card key={cls.id} className="border-2 hover:shadow-elegant transition-all duration-300">
-                    <CardHeader>
-                      <Badge variant="outline" className="w-fit capitalize mb-2">
-                        {cls.category}
-                      </Badge>
+                  <Card key={cls.id} className="border-2 hover:shadow-elegant transition-all duration-300 flex flex-col">
+                    <CardHeader className="pb-2">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Badge variant="outline" className="capitalize">
+                          {cls.category}
+                        </Badge>
+                        {cls.class_type && (
+                          <Badge variant="secondary" className="capitalize text-xs">
+                            {cls.class_type}
+                          </Badge>
+                        )}
+                      </div>
                       <CardTitle className="text-lg line-clamp-2">{cls.title}</CardTitle>
+                      {cls.description && (
+                        <CardDescription className="line-clamp-2 text-sm">{cls.description}</CardDescription>
+                      )}
                     </CardHeader>
-                    <CardContent className="space-y-2">
+                    <CardContent className="space-y-2 flex-1 flex flex-col">
+                      {cls.profiles && (
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <Users className="h-4 w-4" />
+                          {cls.profiles.first_name} {cls.profiles.last_name}
+                        </div>
+                      )}
                       {cls.schedule && (
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
                           <Clock className="h-4 w-4" />
@@ -203,10 +265,30 @@ const Index = () => {
                           {cls.location}
                         </div>
                       )}
-                      <div className="pt-2">
-                        <span className="text-primary font-semibold">
-                          {cls.regular_price ? `${cls.regular_price} RWF` : "Contact for price"}
-                        </span>
+                      <div className="pt-2 space-y-1">
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">Regular:</span>
+                          <span className="text-primary font-semibold">
+                            {cls.regular_price ? `${cls.regular_price} ${cls.currency || 'RWF'}` : "Contact"}
+                          </span>
+                        </div>
+                        {cls.private_price && cls.private_price > 0 && (
+                          <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">Private:</span>
+                            <span className="text-primary font-semibold">
+                              {cls.private_price} {cls.currency || 'RWF'}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="mt-auto pt-4">
+                        <Button 
+                          onClick={() => handleEnrollClick(cls.id)} 
+                          className="w-full"
+                          size="sm"
+                        >
+                          {user ? "Enroll Now" : "Sign in to Enroll"}
+                        </Button>
                       </div>
                     </CardContent>
                   </Card>

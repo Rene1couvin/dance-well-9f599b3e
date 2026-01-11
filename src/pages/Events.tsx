@@ -8,15 +8,18 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Calendar, MapPin, CreditCard } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { format } from "date-fns";
 import MobilePayment from "@/components/MobilePayment";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { useAuthRedirect, RedirectIntent } from "@/hooks/useAuthRedirect";
 
 const Events = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const { redirectToAuth, decodeIntent } = useAuthRedirect();
   const [events, setEvents] = useState<any[]>([]);
   const [bookings, setBookings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -26,10 +29,32 @@ const Events = () => {
 
   useEffect(() => {
     fetchEvents();
+  }, []);
+
+  useEffect(() => {
     if (user) {
       fetchBookings();
+    } else {
+      setBookings([]);
     }
   }, [user]);
+
+  // Handle post-auth redirect - auto-book event
+  useEffect(() => {
+    if (user && events.length > 0 && bookings !== null) {
+      const intent = decodeIntent();
+      if (intent?.action === "book" && intent.id) {
+        const event = events.find(e => e.id === intent.id);
+        const alreadyBooked = bookings.some(b => b.event_id === intent.id);
+        if (event && !alreadyBooked) {
+          // Clear intent from URL first, then book
+          navigate("/events", { replace: true });
+          // Trigger booking after a small delay to ensure state is ready
+          setTimeout(() => handleBook(event), 100);
+        }
+      }
+    }
+  }, [user, events, bookings]);
 
   const fetchEvents = async () => {
     const { data, error } = await supabase
@@ -72,7 +97,12 @@ const Events = () => {
 
   const handleBook = async (event: any) => {
     if (!user) {
-      navigate("/auth");
+      // Redirect to auth with intent to book
+      const intent: RedirectIntent = {
+        action: "book",
+        id: event.id,
+      };
+      redirectToAuth(intent, "/events");
       return;
     }
 
