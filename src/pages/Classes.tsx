@@ -7,17 +7,20 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import MobilePayment from "@/components/MobilePayment";
+import { useAuthRedirect, RedirectIntent } from "@/hooks/useAuthRedirect";
 
 const Classes = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const { redirectToAuth, decodeIntent } = useAuthRedirect();
   const [classes, setClasses] = useState<any[]>([]);
   const [enrollments, setEnrollments] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -39,6 +42,24 @@ const Classes = () => {
       setEnrollments([]);
     }
   }, [user]);
+
+  // Handle post-auth redirect - auto-open enrollment dialog
+  useEffect(() => {
+    if (user && classes.length > 0) {
+      const intent = decodeIntent();
+      if (intent?.action === "enroll" && intent.id) {
+        const classItem = classes.find(c => c.id === intent.id);
+        if (classItem && !enrollments.includes(classItem.id)) {
+          setSelectedClass(classItem);
+          setEnrollmentType(intent.type || "regular");
+          setSelectedDays([]);
+          setShowEnrollDialog(true);
+          // Clear intent from URL
+          navigate("/classes", { replace: true });
+        }
+      }
+    }
+  }, [user, classes, enrollments]);
 
   const fetchClasses = async () => {
     const { data, error } = await supabase
@@ -77,7 +98,12 @@ const Classes = () => {
 
   const handleEnrollClick = (classItem: any) => {
     if (!user) {
-      navigate("/auth");
+      // Redirect to auth with intent to enroll
+      const intent: RedirectIntent = {
+        action: "enroll",
+        id: classItem.id,
+      };
+      redirectToAuth(intent, "/classes");
       return;
     }
     setSelectedClass(classItem);
