@@ -13,6 +13,7 @@ import AnalyticsDashboard from "@/components/admin/AnalyticsDashboard";
 import SampleDataManager from "@/components/admin/SampleDataManager";
 import ContactInbox from "@/components/admin/ContactInbox";
 import GalleryUpload from "@/components/admin/GalleryUpload";
+import GalleryManagement from "@/components/admin/GalleryManagement";
 import BookingManagement from "@/components/admin/BookingManagement";
 import EnrollmentManagement from "@/components/admin/EnrollmentManagement";
 import ArchivedEvents from "@/components/admin/ArchivedEvents";
@@ -203,7 +204,10 @@ const Admin = () => {
           </TabsContent>
 
           <TabsContent value="gallery">
-            <GalleryUpload />
+            <div className="space-y-6">
+              <GalleryManagement />
+              <GalleryUpload />
+            </div>
           </TabsContent>
 
           <TabsContent value="inbox">
