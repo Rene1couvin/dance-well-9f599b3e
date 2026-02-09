@@ -23,6 +23,8 @@ const Classes = () => {
   const { redirectToAuth, decodeIntent } = useAuthRedirect();
   const [classes, setClasses] = useState<any[]>([]);
   const [enrollments, setEnrollments] = useState<string[]>([]);
+  const [waitlistedClasses, setWaitlistedClasses] = useState<string[]>([]);
+  const [enrollmentCounts, setEnrollmentCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [showEnrollDialog, setShowEnrollDialog] = useState(false);
   const [selectedClass, setSelectedClass] = useState<any>(null);
@@ -38,8 +40,10 @@ const Classes = () => {
   useEffect(() => {
     if (user) {
       fetchEnrollments();
+      fetchWaitlist();
     } else {
       setEnrollments([]);
+      setWaitlistedClasses([]);
     }
   }, [user]);
 
@@ -81,6 +85,19 @@ const Classes = () => {
 
     setClasses(data || []);
     setLoading(false);
+
+    // Fetch enrollment counts for each class
+    if (data) {
+      const counts: Record<string, number> = {};
+      for (const c of data) {
+        const { count } = await supabase
+          .from("class_enrollments")
+          .select("id", { count: "exact", head: true })
+          .eq("class_id", c.id);
+        counts[c.id] = count || 0;
+      }
+      setEnrollmentCounts(counts);
+    }
   };
 
   const fetchEnrollments = async () => {
@@ -93,6 +110,18 @@ const Classes = () => {
 
     if (data) {
       setEnrollments(data.map((e) => e.class_id));
+    }
+  };
+
+  const fetchWaitlist = async () => {
+    if (!user) return;
+    const { data } = await supabase
+      .from("class_waitlist")
+      .select("class_id")
+      .eq("user_id", user.id)
+      .eq("status", "waiting");
+    if (data) {
+      setWaitlistedClasses(data.map(w => w.class_id));
     }
   };
 
@@ -192,6 +221,22 @@ const Classes = () => {
     }
   };
 
+  const handleJoinWaitlist = async (classItem: any) => {
+    if (!user) {
+      redirectToAuth({ action: "enroll", id: classItem.id }, "/classes");
+      return;
+    }
+    const { error } = await supabase
+      .from("class_waitlist")
+      .insert({ user_id: user.id, class_id: classItem.id });
+    if (error) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: "Waitlisted!", description: `You'll be notified when a spot opens in ${classItem.title}` });
+    fetchWaitlist();
+  };
+
   const getPrice = () => {
     if (!selectedClass) return 0;
     return enrollmentType === "regular" ? selectedClass.regular_price : selectedClass.private_price;
@@ -216,12 +261,18 @@ const Classes = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {classes.map((classItem) => {
                   const isEnrolled = enrollments.includes(classItem.id);
+                  const isWaitlisted = waitlistedClasses.includes(classItem.id);
+                  const enrolled = enrollmentCounts[classItem.id] || 0;
+                  const isFull = classItem.capacity > 0 && enrolled >= classItem.capacity;
                   
                   return (
                     <Card key={classItem.id} className="hover:shadow-elegant transition-all">
                       <CardHeader>
                         <div className="flex justify-between items-start mb-2">
                           <Badge variant="secondary">{classItem.category}</Badge>
+                          {isFull && !isEnrolled && (
+                            <Badge variant="destructive">Full</Badge>
+                          )}
                         </div>
                         <CardTitle>{classItem.title}</CardTitle>
                         <CardDescription>{classItem.description}</CardDescription>
@@ -240,6 +291,11 @@ const Classes = () => {
                           <p className="text-sm font-medium">Location</p>
                           <p className="text-sm text-muted-foreground">{classItem.location || "TBA"}</p>
                         </div>
+                        {classItem.capacity > 0 && (
+                          <p className="text-xs text-muted-foreground">
+                            {enrolled}/{classItem.capacity} spots filled
+                          </p>
+                        )}
                         <div className="space-y-2">
                           <div className="flex justify-between text-sm">
                             <span>Regular: {classItem.regular_price} {classItem.currency}</span>
@@ -249,6 +305,16 @@ const Classes = () => {
                             <Button variant="outline" onClick={() => handleUnenroll(classItem.id)} className="w-full">
                               Unenroll
                             </Button>
+                          ) : isFull ? (
+                            isWaitlisted ? (
+                              <Button variant="outline" disabled className="w-full">
+                                On Waitlist
+                              </Button>
+                            ) : (
+                              <Button variant="secondary" onClick={() => handleJoinWaitlist(classItem)} className="w-full">
+                                Join Waitlist
+                              </Button>
+                            )
                           ) : (
                             <Button onClick={() => handleEnrollClick(classItem)} className="w-full">
                               Enroll Now
